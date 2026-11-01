@@ -584,6 +584,10 @@ class Fighter {
       for (const k of ['basic', 'heavy', 's0', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 'dash']) if (p[k]) { this.buf = k; this.bufT = 10; }
     }
     if (this.def.passiveTick) this.def.passiveTick(this);
+    if (this.buffs.burn && this.state !== 'ko') {
+      this.hp = Math.max(1, this.hp - 0.18);
+      if (this.anim % 4 === 0) FX.glow(this.x + U.rand(-16, 16), this.y - U.rand(20, 130) * this.scale, U.pick(['#ff9a2a', '#ff5a1a']), 9, 14, 0, -1.8);
+    }
     // Gojo's Infinity: while he blocks, everything near him runs at half speed.
     const opp = World.opp(this);
     if (opp && opp.def.infinityBlock && opp.state === 'block' && this.state !== 'ko' && Math.abs(opp.x - this.x) < 320) {
@@ -764,11 +768,13 @@ class Fighter {
   checkMelee(m, opp) {
     if (!opp) return;
     if (m.hitEvery && (this.mf - m.startup) % m.hitEvery === 0) this.hitList.clear();
+    const hb = this.attackRect(m.hitbox);
+    const spec = m.hitFn ? m.hitFn(this, opp) : m.hit;
+    if (hitSummons(this, hb, null, Object.assign({ melee: true }, spec), this.hitList)) this.moveHit = true;
     if (this.hitList.has(opp)) return;
-    const hb = this.attackRect(m.hitbox), hu = opp.hurtbox();
+    const hu = opp.hurtbox();
     if (!U.overlap(hb, hu)) return;
     this.hitList.add(opp);
-    const spec = m.hitFn ? m.hitFn(this, opp) : m.hit;
     const x = U.clamp(this.x + this.facing * (m.hitbox.x + m.hitbox.w * 0.7) * this.scale, hu.x, hu.x + hu.w);
     const y = U.clamp(hb.y + hb.h / 2, hu.y + 10, hu.y + hu.h - 10);
     const res = Combat.hit(this, opp, Object.assign({ melee: true, dir: this.facing, x, y }, spec));
@@ -947,6 +953,7 @@ class Entity {
     const t = this.target;
     if (!t) return;
     if (this.hitEvery && this.age % this.hitEvery === 0) this.hitSet.clear();
+    if (hitSummons(this.owner, null, this, Object.assign({ proj: true }, this.hits), this.hitSet) && !this.pierce) { this.kill('hit'); return; }
     if (this.hitSet.has(t)) return;
     if (!U.circleRect(this.x, this.y, this.r, t.hurtbox())) return;
     const res = Combat.hit(this.owner, t, Object.assign({ dir: this.vx ? Math.sign(this.vx) : this.owner.facing, x: this.x, y: this.y, proj: true }, this.hits));
@@ -961,6 +968,20 @@ class Entity {
     if (this.onEnd) this.onEnd(this, why);
   }
   draw(ctx) { if (this.render) this.render(ctx, this); }
+}
+
+// Lets attacks strike destructible summons (entities with hp and a hurtbox), e.g. Mahoraga.
+function hitSummons(att, rect, circle, h, seen) {
+  for (const e of World.entities) {
+    if (e.dead || !e.hp || !e.hurtbox || e.owner === att || (seen && seen.has(e))) continue;
+    const box = e.hurtbox(e);
+    if (!(rect ? U.overlap(rect, box) : U.circleRect(circle.x, circle.y, circle.r, box))) continue;
+    if (seen) seen.add(e);
+    let dmg = typeof h.dmgFn === 'function' ? h.dmgFn(att, e) : h.dmg || 0;
+    e.takeHit(e, att, dmg * att.damageMult(h), h);
+    return true;
+  }
+  return false;
 }
 
 // Opposing projectiles cancel each other; the stronger one survives.
@@ -1055,6 +1076,7 @@ const Combat = {
     tgt.hp = Math.max(0, tgt.hp - dmg);
     tgt.flashT = 4;
     att.gainCe(1.5 + dmg * 0.02); tgt.gainCe(1 + dmg * 0.02);
+    if (att.def.onDealHit) att.def.onDealHit(att, tgt, h, dmg);
 
     FX.impact(hx, hy, h, dmg);
     Sound.play(h.sfx || (dmg >= 70 ? 'heavy' : 'hit'));

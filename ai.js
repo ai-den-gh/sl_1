@@ -89,7 +89,13 @@ class AIController {
     if (dist > 480 && f.dashCd <= 0 && !style.ranged && Math.random() < 0.025 * L) { h[toward] = true; this.press('dash'); }
   }
 
-  ultIndex(f) { return f.abilities.findIndex(a => a && a.ult); }
+  ultIndex(f) {
+    const us = [];
+    f.abilities.forEach((a, i) => { if (a && a.ult) us.push(i); });
+    if (!us.length) return -1;
+    const ok = us.filter(i => f.canUse(i));
+    return ok.length ? U.pick(ok) : us[0];
+  }
   // Once close to a full bar, hold cursed energy back for the ultimate.
   saving(f) { const u = this.ultIndex(f); return u >= 0 && f.cd[u] <= 0 && f.ce >= 65; }
 

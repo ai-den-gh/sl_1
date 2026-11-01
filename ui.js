@@ -317,10 +317,10 @@ const UI = {
         ${row('Basic attack / M1 (3-hit chain)', `${k('J')} or Left Click`, `${k('Num1')} or ${k('.')}`)}
         ${row('Heavy attack', k('K'), `${k('Num2')} or ${k('/')}`)}
         ${row('Special techniques 1-4', k('U I O L'), `${k('Num4 Num5 Num6 Num7')} or ${k('P [ ] \\')}`)}
-        ${row('5th technique (Yuji: Takeover · Yuta: Copy · Megumi: Mahoraga · Gojo: Blink Strike)', k('H'), `${k('Num8')} or ${k("'")}`)}
-        ${row('6th technique (Gojo: Blue Maximum Output)', k('G'), `${k('Num9')} or ${k(';')}`)}
-        ${row('7th technique (Gojo: Teleport)', k('Y'), `${k('Num3')} or ${k('-')}`)}
-        ${row('8th technique (Gojo: Reverse Cursed Technique)', k('T'), `${k('Num.')} or ${k('=')}`)}
+        ${row('5th technique (Yuji: Takeover · Yuta: Copy · Megumi: Mahoraga · Gojo: Blink Strike · Sukuna: World-Cutting Slash · Jogo: Coffin)', k('H'), `${k('Num8')} or ${k("'")}`)}
+        ${row('6th technique (Gojo: Blue Max · Sukuna: Spiderweb)', k('G'), `${k('Num9')} or ${k(';')}`)}
+        ${row('7th technique (Gojo: Teleport · Sukuna: Dismantle Barrage)', k('Y'), `${k('Num3')} or ${k('-')}`)}
+        ${row('8th technique (Gojo & Sukuna: Reverse Cursed Technique)', k('T'), `${k('Num.')} or ${k('=')}`)}
         ${row('Dash / dodge', k('Shift'), `${k('Num0')} or ${k('RShift')}`)}
         ${row('Pause', k('Esc'), k('P'))}
       </table>
@@ -664,6 +664,12 @@ function drawHandSign(ctx, sign, cx, cy, k, skin) {
       palm(-24, 16, 24, 28); palm(24, 16, 24, 28);
       for (let i = 0; i < 4; i++) fing(-36, -10 + i * 11, 36, -6 + i * 11, 9);
       fing(-8, -14, -12, -58, 11); fing(8, -14, 12, -58, 11);
+      break;
+    case 'iron': // Jogo: fingertips joined into a volcano peak
+      sleeve(-34, 0.3); sleeve(34, -0.3);
+      palm(-26, 24, 22, 28, -0.4); palm(26, 24, 22, 28, 0.4);
+      for (let i = 0; i < 3; i++) { fing(-30 + i * 6, 4 - i * 4, -4, -54 + i * 8, 9); fing(30 - i * 6, 4 - i * 4, 4, -54 + i * 8, 9); }
+      fing(-24, 40, -2, 22, 11); fing(24, 40, 2, 22, 11);
       break;
     default: // Mahito: palms pressed together
       sleeve(-14, 0.1); sleeve(14, -0.1);

@@ -311,6 +311,29 @@ function drawShadowBg(ctx, d, a) {
   ctx.restore();
 }
 
+function drawVolcanoBg(ctx, d, a) {
+  ctx.save(); ctx.globalAlpha = a;
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#1a0400'); g.addColorStop(0.7, '#6a1800'); g.addColorStop(1, '#2a0800');
+  ctx.fillStyle = g; ctx.fillRect(-30, -30, W + 60, H + 60);
+  // the crater walls closing in
+  ctx.fillStyle = '#120402';
+  ctx.beginPath(); ctx.moveTo(-30, -30); ctx.lineTo(260, -30); ctx.lineTo(120, FLOOR); ctx.lineTo(-30, FLOOR); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(W + 30, -30); ctx.lineTo(W - 260, -30); ctx.lineTo(W - 120, FLOOR); ctx.lineTo(W + 30, FLOOR); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,120,40,0.6)'; ctx.lineWidth = 3;
+  for (let i = 0; i < 7; i++) {
+    const x = 40 + i * 190, w = Math.sin(d.age * 0.05 + i) * 6;
+    ctx.beginPath(); ctx.moveTo(x, 80 + i * 20); ctx.lineTo(x + 20 + w, 220 + i * 30); ctx.lineTo(x - 10, 360 + i * 20); ctx.stroke();
+  }
+  // lava floor
+  const lg = ctx.createLinearGradient(0, FLOOR, 0, H);
+  lg.addColorStop(0, '#ffb03a'); lg.addColorStop(0.3, '#ff5a1a'); lg.addColorStop(1, '#5a0a00');
+  ctx.fillStyle = lg; ctx.fillRect(-30, FLOOR, W + 60, H - FLOOR + 30);
+  ctx.fillStyle = 'rgba(255,240,180,0.6)';
+  for (let i = 0; i < 9; i++) { const x = (i * 151 + d.age * 1.3) % W; ctx.beginPath(); ctx.ellipse(x, FLOOR + 20 + (i % 3) * 18, 26, 4, 0, 0, 6.283); ctx.fill(); }
+  ctx.restore();
+}
+
 function drawHandsBg(ctx, d, a) {
   ctx.save(); ctx.globalAlpha = a;
   const g = ctx.createLinearGradient(0, 0, 0, H);
@@ -786,6 +809,89 @@ const SUKUNA = {
         },
       },
     },
+    {
+      name: 'World-Cutting Slash', icon: '界', color: '#ffffff', cost: 50, cd: 600, ai: { min: 0, max: 1280 },
+      desc: 'A Dismantle that cuts the world itself: an unblockable slash across the entire arena. Dash to dodge it. A killing blow splits the body in half.',
+      move: {
+        id: 'worldslash', kind: 'special', startup: 26, active: 1, recovery: 26,
+        getPose: (f, fr) => (fr < 26 ? POSES.slashW : POSES.slash),
+        onStart(f) { FX.text(f.x, f.y - 195, '"Dismantle."', '#ffffff', 22, 50); Sound.play('charge'); },
+        onFrame(f, fr, t) {
+          const y = f.y - 95 * f.scale;
+          if (fr < 26) { if (fr % 3 === 0) FX.slash(f.x + f.facing * U.rand(40, 900), y, 0, U.rand(30, 90), 'rgba(255,255,255,0.5)', 1, 6); return; }
+          if (fr !== 26) return;
+          Sound.play('slash'); Sound.play('boom'); FX.shake(18); FX.flash('#ffffff', 0.45);
+          spawnSummon(f, { life: 22, y, dir: f.facing, x0: f.x, render(ctx, e) {
+            const k = 1 - e.age / e.life, x1 = e.dir > 0 ? W + 40 : -40;
+            ctx.save(); ctx.globalCompositeOperation = 'lighter';
+            ctx.strokeStyle = `rgba(255,255,255,${k})`; ctx.lineWidth = 2 + 10 * k;
+            ctx.beginPath(); ctx.moveTo(e.x0, e.y); ctx.lineTo(x1, e.y); ctx.stroke();
+            ctx.strokeStyle = `rgba(255,60,90,${k * 0.6})`; ctx.lineWidth = 26 * k;
+            ctx.beginPath(); ctx.moveTo(e.x0, e.y); ctx.lineTo(x1, e.y); ctx.stroke();
+            ctx.restore();
+          } });
+          if (t && t.state !== 'ko' && (t.x - f.x) * f.facing > 0 && Math.abs(t.midY - y) < 95)
+            Combat.hit(f, t, { dmg: 160, kb: 10, kby: -8, launch: true, unblockable: true, hitstop: 16, shake: 16, fx: 'cleave', sfx: 'slash', cleave: true, blood: 34, x: t.x, y, dir: f.facing });
+        },
+      },
+    },
+    {
+      name: 'Spiderweb', icon: '蜘', color: '#ff4d6a', cost: 30, cd: 360, ai: { min: 0, max: 220 },
+      desc: 'Slams a palm into the ground: a spiderweb of slashes erupts all around Sukuna, launching anyone standing nearby.',
+      move: {
+        id: 'spiderweb', kind: 'special', startup: 14, active: 1, recovery: 22, poses: ['heavyW', 'slash'],
+        onFrame(f, fr, t) {
+          if (fr !== 14) return;
+          Sound.play('slash'); FX.shake(12); FX.debris(f.x, f.y, '#5a4a3a', 16, 12); FX.dust(f.x, f.y, 14);
+          for (let i = 0; i < 14; i++) {
+            const a = Math.PI + (i / 13) * Math.PI;
+            FX.slash(f.x + Math.cos(a) * 110, f.y + Math.sin(a) * 40 - 6, a, 220, i % 2 ? '#ffffff' : '#ff4d6a', 4, 18);
+          }
+          for (let r = 1; r <= 3; r++) FX.ring(f.x, f.y - 8, '#ff4d6a', 80 * r, 18 + r * 3, 3);
+          if (t && t.state !== 'ko' && Math.abs(t.x - f.x) < 230 && Math.abs(t.y - f.y) < 130)
+            Combat.hit(f, t, { dmg: 95, kb: 9, kby: -13, launch: true, hitstop: 10, shake: 10, fx: 'cleave', sfx: 'slash', blood: 14, x: t.x, y: t.midY, dir: dirTo(f, t) });
+        },
+      },
+    },
+    {
+      name: 'Dismantle Barrage', icon: '乱', color: '#ffffff', cost: 30, cd: 300, ai: { min: 120, max: 900 },
+      desc: 'Flicks out five Dismantles in rapid succession, fanning across high and low.',
+      move: {
+        id: 'dbarrage', kind: 'special', startup: 8, active: 0, recovery: 0, total: 40,
+        getPose: (f, fr) => (fr < 8 ? POSES.slashW : Math.floor(fr / 5) % 2 ? POSES.slash2 : POSES.slash),
+        onFrame(f, fr) {
+          if (fr < 8 || (fr - 8) % 5 !== 0 || fr > 28) return;
+          const i = (fr - 8) / 5;
+          Sound.play('slash');
+          spawnProj(f, {
+            x: f.x + f.facing * 45, y: f.y - [100, 60, 135, 80, 115][i], vx: f.facing * 22, vy: [0, 0.6, -0.6, 0.3, -0.3][i], r: 22, life: 50, clash: 1,
+            hits: { dmg: 30, kb: 3, stun: 16, fx: 'slash', sfx: 'slash', hitstop: 2, blood: 4 },
+            render(ctx, e) {
+              ctx.save(); ctx.globalCompositeOperation = 'lighter';
+              ctx.globalAlpha = 0.3 + 0.3 * Math.abs(Math.sin(e.age * 0.9));
+              ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+              ctx.beginPath(); ctx.arc(e.x - e.vx * 1.4, e.y, 28, -0.9, 0.9); ctx.stroke();
+              ctx.restore();
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Reverse Cursed Technique', icon: '反', color: '#ffb3c0', cost: 40, cd: 900, ground: true, noCopy: true,
+      ai: { min: 300, max: 1280, when: f => f.hp < f.maxHp * 0.5 },
+      desc: 'Regenerates his body with positive energy — heals up to 180 health over a short channel. Getting hit interrupts it.',
+      move: {
+        id: 'srct', kind: 'special', startup: 45, active: 0, recovery: 8, poses: ['sign', 'idle'],
+        onStart(f) { FX.text(f.x, f.y - 190, 'Reverse Cursed Technique', '#ffb3c0', 18, 50); Sound.play('heal'); },
+        onFrame(f, fr) {
+          if (fr >= 45) return;
+          f.hp = Math.min(f.maxHp, f.hp + 4);
+          if (fr % 2 === 0) FX.glow(f.x + U.rand(-26, 26), f.y - U.rand(10, 140), U.pick(['#ffb3c0', '#ffffff']), 12, 20, 0, -1.6);
+          if (fr === 44) FX.text(f.x, f.y - 175, '+180', '#ffb3c0', 26, 45);
+        },
+      },
+    },
   ],
 };
 
@@ -925,8 +1031,13 @@ const YUJI = {
     {
       name: 'Sukuna Takeover', icon: '宿', color: '#ff1f3d', cost: 50, cd: 60, ground: true, noCopy: true,
       ai: { min: 0, max: 1280, when: f => f.hp < f.maxHp * 0.7 },
-      desc: 'Once per round, Yuji lets the King of Curses take over for 30 seconds — Sukuna\'s moveset, techniques and Domain Expansion, with a full cursed energy bar.',
-      getMove: f => (f.usedTakeover || f.takeoverT > 0 ? null : TAKEOVER_MOVE),
+      desc: 'Once per round, Yuji lets the King of Curses take over for 30 seconds — Sukuna\'s moveset, techniques and Domain Expansion, with a full cursed energy bar. Unavailable when Sukuna is the opponent.',
+      // Sukuna can't take over Yuji's body while Sukuna himself is the opponent.
+      getMove: f => {
+        const o = World.opp(f);
+        if (f.usedTakeover || f.takeoverT > 0 || (o && o.baseDef.id === 'sukuna')) return null;
+        return TAKEOVER_MOVE;
+      },
     },
   ],
 };
@@ -1310,9 +1421,27 @@ const MEGUMI = {
           FX.smoke(f.x - f.facing * 70, FLOOR - 40, '#1a1028', 14, 40, 26);
           spawnSummon(f, {
             x: U.clamp(f.x - f.facing * 70, World.left + 40, World.right - 40), y: FLOOR, life, dir: f.facing,
+            hp: 650, maxHp: 650, adapt: {}, flash: 0,
+            hurtbox: e => ({ x: e.x - 40, y: FLOOR - 290, w: 80, h: 290 }),
+            // Mahoraga can be destroyed, but it adapts to each kind of attack it takes.
+            takeHit(e, att, dmg, h) {
+              const kind = h.proj ? 'proj' : 'melee', n = e.adapt[kind] || 0;
+              e.adapt[kind] = n + 1; f.adaptSpin++;
+              dmg = Math.round(dmg * (1 - Math.min(0.6, n * 0.15)));
+              e.hp -= dmg; e.flash = 4;
+              const hx = e.x, hy = FLOOR - 150;
+              FX.impact(hx, hy, h, dmg); Sound.play(dmg >= 60 ? 'heavy' : 'hit'); FX.hitstop(3);
+              FX.text(hx + U.rand(-20, 20), FLOOR - 320, dmg, '#f2efe6', 18, 40);
+              if (n + 1 === 4) FX.text(hx, FLOOR - 350, 'ADAPTED', '#f2efe6', 22, 50);
+              if (e.hp <= 0) {
+                e.slain = true; e.kill('slain'); delete f.buffs.mahoraga;
+                FX.explosion(hx, hy, 140, ['#ffffff', '#f2efe6', '#c9a23a']); FX.shake(18); FX.flash('#ffffff', 0.5); Sound.play('boom');
+                FX.text(hx, FLOOR - 340, 'MAHORAGA EXORCISED', '#ffd34d', 30, 90);
+              }
+            },
             mode: 'walk', st: 0, cool: 40, wheel: 0, pose: poseCopy(POSES.idle), anim: 0,
             tick(e, t) {
-              e.anim++;
+              e.anim++; if (e.flash > 0) e.flash--;
               e.wheel = U.lerp(e.wheel, f.adaptSpin * 45, 0.12);
               if (f.state === 'ko') { e.life = Math.min(e.life, e.age + 20); return; }
               let target = POSES.idle;
@@ -1337,11 +1466,14 @@ const MEGUMI = {
               e.x = U.clamp(e.x, World.left + 50, World.right - 50);
               poseLerpInto(e.pose, target, 0.3);
             },
-            onEnd(e) { FX.smoke(e.x, FLOOR - 80, '#1a1028', 14, 40, 26); },
+            onEnd(e) { FX.smoke(e.x, FLOOR - 80, '#1a1028', 14, 40, 26); delete f.buffs.mahoraga; },
             render(ctx, e) {
               ctx.save(); ctx.globalAlpha = Math.min(1, e.age / 15, (e.life - e.age) / 15);
               ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(e.x, FLOOR + 3, 70, 12, 0, 0, 6.283); ctx.fill();
-              drawStickman(ctx, MAHORAGA, e.pose, e.x, e.y, e.dir, { wheel: e.wheel });
+              drawStickman(ctx, MAHORAGA, e.pose, e.x, e.y, e.dir, { wheel: e.wheel, white: e.flash > 0 });
+              const bw = 110, bx = e.x - bw / 2, by = FLOOR - 335;
+              ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(bx - 2, by - 2, bw + 4, 11);
+              ctx.fillStyle = '#f2efe6'; ctx.fillRect(bx, by, bw * Math.max(0, e.hp) / e.maxHp, 7);
               ctx.restore();
             },
           });
@@ -1531,9 +1663,10 @@ const HANAMI = {
 
 const JOGO = {
   id: 'jogo', name: 'Jogo', short: 'JOGO', title: 'Disaster Curse of Volcanoes', kanji: '漏瑚', color: '#ff8a2a', curse: true,
-  style: 'Ranged fire attacks, homing insects and a meteor big enough to end a fight.', bio: 'A hot-tempered disaster curse born from humanity\'s fear of the earth.',
-  passive: { name: 'Volcanic Body', desc: 'Leaks smoke and heat constantly.' },
-  hp: 950, speed: 0.95, melee: { power: 1.0 },
+  style: 'Ranged fire attacks, homing insects, erupting volcanoes and a meteor big enough to end a fight.', bio: 'A hot-tempered disaster curse born from humanity\'s fear of the earth.',
+  passive: { name: 'Burning Body', desc: 'Jogo\'s punches and kicks set the opponent ablaze, burning away health for 2 seconds (burns can\'t finish a fight).' },
+  hp: 1000, speed: 0.98, melee: { power: 1.05 },
+  onDealHit(f, t, h) { if (h.melee) t.buffs.burn = 120; },
   look: curseLook('#d9cbb0', '#5a2a18'), aiStyle: { pref: 300, ranged: true },
   passiveTick(f) { if (f.anim % 7 === 0 && f.state !== 'ko') { const h = headPos(f); FX.smoke(h.x, h.y - 26 * f.scale, '#6a6060', 1, 3, 8); } },
   drawHead(g) {
@@ -1576,7 +1709,21 @@ const JOGO = {
         },
       },
     },
-    null,
+    {
+      name: 'Fire Breath', icon: '焔', color: '#ff9a2a', cost: 20, cd: 200, ai: { min: 0, max: 190 },
+      desc: 'Exhales a roaring cone of flame that hits repeatedly and leaves the opponent burning.',
+      move: {
+        id: 'breath', kind: 'special', startup: 10, active: 24, recovery: 16, poses: ['castW', 'cast'], hitEvery: 6,
+        hitbox: { x: 10, y: -150, w: 175, h: 90 }, hit: { dmg: 15, kb: 2.5, stun: 14, fx: 'fire', sfx: 'fire', hitstop: 1, noScale: true },
+        onFrame(f, fr) {
+          if (fr === 10) Sound.play('fire');
+          if (fr < 10 || fr >= 34) return;
+          const h = headPos(f);
+          for (let i = 0; i < 3; i++) FX.glow(h.x + f.facing * U.rand(10, 40), h.y + 8, U.pick(['#fff3b0', '#ff9a2a', '#ff3a1a']), U.rand(10, 20), 18, f.facing * U.rand(7, 12), U.rand(-1.5, 1.5));
+        },
+        onHit(f, t) { t.buffs.burn = 120; },
+      },
+    },
     {
       name: 'Maximum: Meteor', icon: '隕', color: '#ff3a1a', cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 1280 }, desc: 'ULTIMATE. Summons a colossal meteor that crashes down on the opponent.',
       move: {
@@ -1604,6 +1751,29 @@ const JOGO = {
               ctx.save(); ctx.fillStyle = '#3a1a10'; ctx.strokeStyle = '#ff7a1a'; ctx.lineWidth = 6;
               ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, 6.283); ctx.fill(); ctx.stroke(); ctx.restore();
               glowOrb(ctx, e.x, e.y + 20, e.r * 0.8, '#fff3b0', '#ff5a1a', 0.7);
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Coffin of the Iron Mountain', icon: '蓋', color: '#ff5a1a', cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 1280 },
+      desc: 'DOMAIN EXPANSION. Seals the opponent inside a volcano: the heat burns them constantly and lava erupts beneath their feet.',
+      move: {
+        id: 'coffin', kind: 'ult', startup: 60, active: 0, recovery: 0, poses: ['sign', 'sign'],
+        onStart(f) { f.invuln = 70; domainCutscene(f, 'iron', 'COFFIN OF THE IRON MOUNTAIN'); FX.banner('DOMAIN EXPANSION', 'COFFIN OF THE IRON MOUNTAIN', '#ff8a2a', 130); FX.slow(40, 0.35); Sound.play('charge'); },
+        onFrame(f, fr) {
+          f.invuln = Math.max(f.invuln, 2);
+          if (fr !== 40) return;
+          Domains.start(f, {
+            type: 'volcano', life: 300, bg: drawVolcanoBg,
+            tick(d, t) {
+              if (d.age % 3 === 0) FX.glow(U.rand(0, W), FLOOR - U.rand(0, 40), U.pick(['#ff9a2a', '#ff5a1a']), 14, 30, 0, -3);
+              if (!t || t.state === 'ko') return;
+              t.buffs.burn = Math.max(t.buffs.burn || 0, 20);
+              if (d.age > 20 && d.age % 10 === 0)
+                Combat.hit(f, t, { dmg: 9, kb: 0.5, stun: 8, hitstop: 0, type: 'domain', chip: 0.5, noScale: true, quiet: true, fx: 'fire', sfx: 'fire', x: t.x, y: t.midY, dir: dirTo(f, t) });
+              if (d.age % 60 === 30) eruption(f, t.x, { y: World.groundAt(t.x, t.y), delay: 24, w: 90, h: 210, kind: 'fire', hits: { dmg: 70, kb: 4, kby: -15, launch: true, fx: 'fire', type: 'domain' } });
             },
           });
         },
@@ -1677,8 +1847,8 @@ const MAHITO = {
 /* ---------------------------------------------------------------- roster */
 
 const CHARS = { gojo: GOJO, sukuna: SUKUNA, yuji: YUJI, yuta: YUTA, megumi: MEGUMI, g4: CURSE_G4, g3: CURSE_G3, finger: FINGER_BEARER, hanami: HANAMI, jogo: JOGO, mahito: MAHITO };
-const ROSTER = ['yuji', 'gojo', 'sukuna', 'yuta', 'megumi', 'mahito'];
-const CURSE_IDS = ['g4', 'g3', 'finger', 'hanami', 'jogo'];
+const ROSTER = ['yuji', 'gojo', 'sukuna', 'yuta', 'megumi', 'mahito', 'jogo'];
+const CURSE_IDS = ['g4', 'g3', 'finger', 'hanami'];
 
 /* ---------------------------------------------------------------- Story Mode */
 
