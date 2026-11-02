@@ -661,7 +661,9 @@ class Fighter {
   control() {
     const inp = World.active && this.input ? this.input : NULL_INPUT;
     const h = inp.held, p = inp.pressed, opp = World.opp(this);
-    if (this.onGround && opp && opp.state !== 'ko') this.facing = opp.x >= this.x ? 1 : -1;
+    // face the opponent, or a summon the CPU has decided to destroy first
+    const ft = this.faceTarget && !this.faceTarget.dead ? this.faceTarget : opp;
+    if (this.onGround && ft && ft.state !== 'ko') this.facing = ft.x >= this.x ? 1 : -1;
     if (this.buf && this.useBuffer()) return;
     const slow = this.slowFactor();
     if (h.down && this.onGround) {

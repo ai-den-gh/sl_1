@@ -55,6 +55,20 @@ class AIController {
     }
     if (this.blockT > 0) { this.blockT--; h.down = true; return; }
 
+    // ---- enemy shikigami / summons nearby: break them before going back to the opponent
+    const sum = this.summonTarget(f, dist, L);
+    f.faceTarget = sum;
+    if (sum) {
+      const b = sum.hurtbox(sum), sx = b.x + b.w / 2, sdx = sx - f.x, sd = Math.abs(sdx) - b.w / 2;
+      if (sd > reach - 14) h[sdx >= 0 ? 'right' : 'left'] = true;
+      else if (--this.think <= 0) {
+        this.think = Math.round(U.rand(5, 14) * (1.45 - L));
+        if (b.y + b.h < f.y - 110 && f.onGround) this.press('up');
+        else this.press(Math.random() < 0.7 ? 'basic' : 'heavy');
+      }
+      return;
+    }
+
     // ---- ultimate
     const u = this.ultIndex(f);
     if (u >= 0 && f.canUse(u) && !World.domain && o.invuln <= 0) {
@@ -95,6 +109,27 @@ class AIController {
     else if (style.ranged && dist < pref * 0.5) h[away] = true;
     if (o.y < f.y - 80 && dist < 240 && f.onGround && Math.random() < 0.08) this.press('up');
     if (dist > 480 && f.dashCd <= 0 && !style.ranged && Math.random() < 0.025 * L) { h[toward] = true; this.press('dash'); }
+  }
+
+  // Picks an enemy summon worth attacking (close, reachable, with health), or null.
+  // The choice is kept for a short while so the CPU commits instead of flip-flopping.
+  summonTarget(f, oppDist, L) {
+    const cur = this.sumT;
+    if (cur && !cur.dead && cur.hp > 0 && this.sumHold-- > 0) return cur;
+    this.sumT = null;
+    if (this.sumCheck-- > 0) return null;
+    this.sumCheck = 20;
+    let best = null, bd = Infinity;
+    for (const e of World.entities) {
+      if (e.dead || !(e.hp > 0) || !e.hurtbox || !e.owner || e.owner.team === f.team) continue;
+      const b = e.hurtbox(e), d = Math.abs(b.x + b.w / 2 - f.x);
+      if (b.y + b.h < f.y - 230) continue;                 // out of reach in the air (e.g. Nue)
+      const bigThreat = e.maxHp >= 200;                    // Mahoraga, Ox, Serpent, Elephant
+      if (d > (bigThreat ? 420 : 260) || (!bigThreat && d > oppDist)) continue;
+      if (d < bd) { bd = d; best = e; }
+    }
+    if (best && Math.random() < 0.35 + 0.55 * L) { this.sumT = best; this.sumHold = 90; return best; }
+    return null;
   }
 
   ultIndex(f) {

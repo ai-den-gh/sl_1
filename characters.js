@@ -1628,24 +1628,36 @@ const MEGUMI = {
     },
     {
       name: 'Rabbit Escape', icon: '兎', color: '#f2f2f6', cost: 15, cd: 300, ai: { min: 0, max: 160 },
-      desc: 'A swarm of rabbits floods the ground while Megumi hops away. The rabbits soak up incoming projectiles and attacks until they are destroyed.',
+      desc: 'Instantly bursts into a swarm of rabbits that shoot out in every direction — clipping anyone in the way — while Megumi leaps clear. The landed rabbits soak up incoming projectiles and attacks until destroyed.',
       move: {
-        id: 'rabbits', kind: 'special', startup: 6, active: 1, recovery: 12, poses: ['sign', 'jump'],
+        id: 'rabbits', kind: 'special', startup: 1, active: 1, recovery: 6, poses: ['sign', 'jump'],
         onFrame(f, fr) {
-          if (fr !== 6) return;
-          Sound.play('whoosh'); FX.smoke(f.x, f.y - 20, '#1a1028', 10, 30, 18);
-          const ox = f.x;
-          f.invuln = Math.max(f.invuln, 20); f.vx = -f.facing * 13; f.vy = -9; f.onGround = false;
-          for (let i = 0; i < 12; i++) spawnSummon(f, {
-            x: ox + U.rand(-70, 70), y: FLOOR, life: Math.round(U.rand(130, 170) * f.summonMult()), r: 14, clash: 1, dir: U.pick([-1, 1]),
-            name: 'RABBIT', hp: 10, maxHp: 10, noBar: true, hurtbox: e => ({ x: e.x - 12, y: e.y - 22, w: 24, h: 22 }),
-            tick(e) {
-              e.hop = (e.hop || U.randInt(0, 20)) + 1;
+          if (fr !== 1) return;
+          Sound.play('whoosh'); Sound.play('dash'); FX.smoke(f.x, f.y - 30, '#1a1028', 14, 34, 20); FX.ring(f.x, f.y - 60, '#f2f2f6', 110, 14, 4);
+          const ox = f.x, oy = f.y - 60;
+          f.invuln = Math.max(f.invuln, 24); f.vx = -f.facing * 18; f.vy = -11; f.onGround = false;
+          // the swarm erupts out of Megumi in every direction, nicking anyone it flies through
+          for (let i = 0; i < 16; i++) {
+            const a = -Math.PI * (0.05 + 0.9 * (i / 15)), sp = U.rand(11, 19);
+            spawnSummon(f, {
+              x: ox, y: oy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: Math.round(U.rand(130, 170) * f.summonMult()), r: 14, clash: 1,
+              dir: Math.cos(a) >= 0 ? 1 : -1, flying: true, pierce: true,
+              hits: { dmg: 6, kb: 3, stun: 8, noScale: true, quiet: true, hitstop: 0, sfx: 'tick', color: '#f2f2f6' },
+              name: 'RABBIT', hp: 10, maxHp: 10, noBar: true, hurtbox: e => ({ x: e.x - 12, y: e.y - 22, w: 24, h: 22 }),
+              tick(e) {
+                if (e.flying) {
+                  e.vy += 0.75; e.vx *= 0.985;
+                  if (e.age % 2 === 0) FX.add({ type: 'smoke', x: e.x, y: e.y, life: 12, size: 4, color: '#d8d8e8', drag: 0.9 });
+                  if (e.x < World.left + 10 || e.x > World.right - 10) { e.vx = -e.vx * 0.4; e.x = U.clamp(e.x, World.left + 10, World.right - 10); }
+                  if (e.y >= FLOOR && e.vy > 0) { e.flying = false; e.y = FLOOR; e.vx = 0; e.vy = 0; e.hits = null; FX.dust(e.x, FLOOR, 2); }
+                  return;
+                }
+                e.hop = (e.hop || U.randInt(0, 20)) + 1;
               if (e.hop % 22 === 0) e.dir = Math.random() < 0.3 ? -e.dir : e.dir;
-              e.x = U.clamp(e.x + e.dir * 1.6, World.left + 10, World.right - 10);
-              e.y = FLOOR - Math.abs(Math.sin(e.hop * 0.28)) * 14;
-              e.vy = 0;
-            },
+                e.x = U.clamp(e.x + e.dir * 1.6, World.left + 10, World.right - 10);
+                e.y = FLOOR - Math.abs(Math.sin(e.hop * 0.28)) * 14;
+                e.vy = 0;
+              },
             onEnd(e) { FX.smoke(e.x, FLOOR - 10, '#1a1028', 2, 6, 8); },
             render(ctx, e) {
               ctx.save(); ctx.translate(e.x, e.y); ctx.scale(e.dir, 1);
@@ -1658,26 +1670,27 @@ const MEGUMI = {
               ctx.restore();
             },
           });
+          }
         },
       },
     },
     {
       name: 'Great Serpent', icon: '蛇', color: '#7fae6a', cost: 30, cd: 420, ai: { min: 0, max: 700 },
-      desc: 'A giant serpent bursts from the ground beneath the opponent, seizes them in its jaws and slams them down. Destroy it to break free.',
+      desc: 'A colossal serpent bursts from the ground beneath the opponent, seizes them in its jaws, hoists them high and slams them down. Destroy it to break free.',
       move: {
         id: 'serpent', kind: 'special', startup: 12, active: 1, recovery: 18, poses: ['sign', 'point'],
         onFrame(f, fr, t) {
           if (fr !== 12 || !t) return;
           const gy = World.groundAt(t.x, t.y);
           spawnSummon(f, {
-            x: t.x, y: gy, life: 120, delay: 26, rise: 0, name: 'GREAT SERPENT', hp: 160, maxHp: 160,
-            hurtbox: e => ({ x: e.x - 26, y: e.y - 40 - e.rise * 170, w: 52, h: 40 + e.rise * 170 }),
+            x: t.x, y: gy, life: 130, delay: 26, rise: 0, name: 'GREAT SERPENT', hp: 240, maxHp: 240,
+            hurtbox: e => ({ x: e.x - 42, y: e.y - 60 - e.rise * 280, w: 84, h: 60 + e.rise * 280 }),
             tick(e, tt) {
               if (e.age < e.delay) { if (tt) e.x = U.lerp(e.x, tt.x, 0.06); return; }
               e.rise = Math.min(1, (e.age - e.delay) / 8);
               if (e.age === e.delay) {
-                Sound.play('roar'); FX.debris(e.x, e.y, '#3a4a2a', 12, 10); FX.shake(10);
-                if (tt && tt.state !== 'ko' && tt.invuln <= 0 && Math.abs(tt.x - e.x) < 60 && Math.abs(tt.y - e.y) < 120) {
+                Sound.play('roar'); FX.debris(e.x, e.y, '#3a4a2a', 22, 14); FX.dust(e.x, e.y, 16); FX.shake(16);
+                if (tt && tt.state !== 'ko' && tt.invuln <= 0 && Math.abs(tt.x - e.x) < 95 && Math.abs(tt.y - e.y) < 160) {
                   e.held = tt;
                   Combat.hit(f, tt, { dmg: 30, stunAdd: 80, freeze: true, unblockable: true, kb: 0, hitstop: 6, x: e.x, y: tt.midY, dir: dirTo(f, tt) });
                 }
@@ -1685,7 +1698,7 @@ const MEGUMI = {
               const h = e.held;
               if (h && h.state === 'stun') {
                 const k = e.age - e.delay;
-                if (k < 40) { h.x = e.x; h.y = e.y - Math.min(130, k * 4); }
+                if (k < 40) { h.x = e.x; h.y = e.y - Math.min(220, k * 6); }
                 if (k === 40) {
                   h.y = e.y; h.stun = 0; h.frozen = false; h.setState('idle');
                   Combat.hit(f, h, { dmg: 70, kb: 6, kby: -6, launch: true, unblockable: true, sureHit: true, hitstop: 12, shake: 14, sfx: 'heavy', x: h.x, y: h.y - 30, dir: dirTo(f, h) });
@@ -1697,17 +1710,20 @@ const MEGUMI = {
             render(ctx, e) {
               if (e.age < e.delay) {
                 ctx.save(); ctx.globalAlpha = 0.4 + 0.3 * Math.sin(e.age * 0.6) ** 2; ctx.fillStyle = '#4a6a3a';
-                ctx.beginPath(); ctx.ellipse(e.x, e.y + 2, 46, 8, 0, 0, 6.283); ctx.fill(); ctx.restore();
+                ctx.beginPath(); ctx.ellipse(e.x, e.y + 2, 80, 12, 0, 0, 6.283); ctx.fill(); ctx.restore();
                 return;
               }
-              const top = e.y - 40 - e.rise * (e.held ? Math.min(130, (e.age - e.delay) * 4) + 40 : 170);
+              const top = e.y - 60 - e.rise * (e.held ? Math.min(220, (e.age - e.delay) * 6) + 60 : 280);
               ctx.save(); ctx.globalAlpha = Math.min(1, (e.life - e.age) / 12);
-              ctx.lineCap = 'round'; ctx.strokeStyle = '#16200f'; ctx.lineWidth = 38;
-              ctx.beginPath(); ctx.moveTo(e.x, e.y + 10); ctx.bezierCurveTo(e.x - 40, e.y - 60, e.x + 40, top + 60, e.x, top); ctx.stroke();
-              ctx.strokeStyle = '#5f8a4a'; ctx.lineWidth = 32; ctx.stroke();
-              ctx.fillStyle = '#5f8a4a'; ctx.strokeStyle = '#16200f'; ctx.lineWidth = 3;
-              ctx.beginPath(); ctx.ellipse(e.x + 6, top - 6, 30, 20, 0, 0, 6.283); ctx.fill(); ctx.stroke();
-              ctx.fillStyle = '#ffd34d'; ctx.beginPath(); ctx.arc(e.x + 18, top - 12, 4, 0, 6.283); ctx.fill();
+              ctx.lineCap = 'round'; ctx.strokeStyle = '#16200f'; ctx.lineWidth = 64;
+              ctx.beginPath(); ctx.moveTo(e.x, e.y + 20); ctx.bezierCurveTo(e.x - 70, e.y - 100, e.x + 70, top + 100, e.x, top); ctx.stroke();
+              ctx.strokeStyle = '#5f8a4a'; ctx.lineWidth = 56; ctx.stroke();
+              ctx.strokeStyle = '#7fae6a'; ctx.lineWidth = 18; ctx.stroke();
+              ctx.fillStyle = '#5f8a4a'; ctx.strokeStyle = '#16200f'; ctx.lineWidth = 4;
+              ctx.beginPath(); ctx.ellipse(e.x + 10, top - 10, 52, 34, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+              ctx.fillStyle = '#2a1a10'; ctx.beginPath(); ctx.moveTo(e.x + 30, top + 4); ctx.lineTo(e.x + 62, top - 2); ctx.lineTo(e.x + 30, top + 14); ctx.fill();
+              ctx.fillStyle = '#ffd34d'; ctx.beginPath(); ctx.arc(e.x + 30, top - 20, 7, 0, 6.283); ctx.fill();
+              ctx.fillStyle = '#111'; ctx.beginPath(); ctx.ellipse(e.x + 31, top - 20, 2, 5, 0, 0, 6.283); ctx.fill();
               ctx.restore();
             },
           });
@@ -2304,13 +2320,13 @@ function rushComboMove(o) {
 
 const JIN = {
   id: 'jin', name: 'Jin Akagami', short: 'JIN', title: 'The Unbound', kanji: '赤髪迅', color: '#9be05a',
-  style: 'A sorcerer with no cursed energy at all — pure speed, a chain-sickle, and zero hesitation.',
-  bio: 'Born without a drop of cursed energy, Jin trained his body until curses could no longer keep up. He fights with a chain-sickle and a pocket full of throwing knives.',
+  style: 'A sorcerer with no cursed energy at all — pure strength, a massive greatsword, and zero hesitation.',
+  bio: 'Born without a drop of cursed energy, Jin trained his body until curses could no longer keep up. He swings a greatsword nearly as tall as he is as if it weighed nothing.',
   passive: { name: 'Zero Cursed Energy', desc: 'Jin has no cursed energy: his techniques cost nothing and run on cooldowns only. He moves 20% faster, his melee hits 20% harder, and domain sure-hits deal him half damage.' },
-  hp: 1000, speed: 1.2, noCE: true, initCd: { 4: 900 },
-  melee: { weapon: 'sword', reach: 18, power: 1.0 },
+  hp: 1050, speed: 1.12, noCE: true, initCd: { 4: 900 },
+  melee: { weapon: 'sword', weaponName: 'Greatsword', reach: 42, power: 1.05 },
   look: { skin: '#e8c8b0', top: '#3e4a3a', pants: '#22262c', accent: '#9be05a', eye: '#2a2a2a' },
-  aiStyle: { pref: 95 },
+  aiStyle: { pref: 120 },
   dmgMult(f, h) { return h.melee ? 1.2 : 1; },
   onIncoming(f, dmg, h) { return { dmg: h.type === 'domain' ? dmg * 0.5 : dmg }; },
   drawHair(g, hx, hy, r) {
@@ -2323,40 +2339,63 @@ const JIN = {
     ctx.strokeStyle = col('#c4122f'); ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(hx - r + 1, hy - 7); ctx.lineTo(hx - r - 12, hy - 2); ctx.moveTo(hx - r + 1, hy - 6); ctx.lineTo(hx - r - 9, hy + 5); ctx.stroke();
   },
+  // An oversized greatsword: broad blade with a fuller, crossguard, red-wrapped hilt.
   drawWeapon(g) {
     const { ctx, sk, col, OL } = g, e = sk.aF[1], h = sk.aF[2];
     let dx = h[0] - e[0], dy = h[1] - e[1];
     const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
-    const end = [h[0] + dx * 22, h[1] + dy * 22];
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = OL; ctx.lineWidth = 6; lineTo2(ctx, h, end);
-    ctx.strokeStyle = col('#5a3a24'); ctx.lineWidth = 4; lineTo2(ctx, h, end);
-    // the sickle blade hooks off the end of the handle
-    ctx.strokeStyle = col('#dfe6ee'); ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(end[0], end[1]); ctx.quadraticCurveTo(end[0] + dx * 14 - dy * 4, end[1] + dy * 14 + dx * 4, end[0] - dy * 18, end[1] + dx * 18); ctx.stroke();
-    // chain dangling from the pommel
-    ctx.strokeStyle = col('#8a8f9a'); ctx.lineWidth = 1.5; ctx.setLineDash([3, 2]);
-    ctx.beginPath(); ctx.moveTo(h[0], h[1]); ctx.quadraticCurveTo(h[0] - dx * 10, h[1] + 20, h[0] - 14, h[1] + 26); ctx.stroke();
-    ctx.setLineDash([]);
+    const px = -dy, py = dx, at = (k, w) => [h[0] + dx * k + px * w, h[1] + dy * k + py * w];
+    ctx.lineJoin = 'round';
+    // blade
+    ctx.beginPath();
+    const b = [at(9, 7), at(98, 6), at(112, 0), at(98, -6), at(9, -7)];
+    ctx.moveTo(b[0][0], b[0][1]); for (const q of b.slice(1)) ctx.lineTo(q[0], q[1]); ctx.closePath();
+    ctx.fillStyle = col('#d7dde6'); ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = OL; ctx.stroke();
+    ctx.strokeStyle = col('#8f99a8'); ctx.lineWidth = 2; lineTo2(ctx, at(14, 0), at(92, 0));
+    // crossguard
+    ctx.strokeStyle = OL; ctx.lineWidth = 7; lineTo2(ctx, at(8, 13), at(8, -13));
+    ctx.strokeStyle = col('#4a4f58'); ctx.lineWidth = 4; lineTo2(ctx, at(8, 12), at(8, -12));
+    // red-wrapped hilt and pommel
+    ctx.strokeStyle = OL; ctx.lineWidth = 7; lineTo2(ctx, at(-16, 0), at(6, 0));
+    ctx.strokeStyle = col('#c4122f'); ctx.lineWidth = 4; lineTo2(ctx, at(-16, 0), at(6, 0));
+    const pm = at(-19, 0);
+    ctx.beginPath(); ctx.arc(pm[0], pm[1], 3.5, 0, 6.283); ctx.fillStyle = col('#4a4f58'); ctx.fill(); ctx.strokeStyle = OL; ctx.lineWidth = 1.5; ctx.stroke();
   },
   abilities: [
     {
-      name: 'Chain Lash', icon: '鎖', color: '#c0c4cc', cost: 0, cd: 150, ai: { min: 90, max: 300 },
-      desc: 'Hurls the chain-sickle at long range and yanks whoever it catches right up to Jin.',
+      name: 'Sword Hurl', icon: '投', color: '#d7dde6', cost: 0, cd: 210, ai: { min: 120, max: 520 },
+      desc: 'Hurls the greatsword end over end. It carves through everything in its path, then flies back to his hand.',
       move: {
-        id: 'chainlash', kind: 'special', startup: 10, active: 5, recovery: 18, poses: ['castW', 'point'], sfx: 'swish',
-        hitbox: { x: 0, y: -128, w: 300, h: 42 }, hit: { dmg: 45, kb: 0, stun: 32, color: '#c0c4cc' },
+        id: 'swordhurl', kind: 'special', startup: 12, active: 1, recovery: 22, poses: ['slashW', 'cast'],
         onFrame(f, fr) {
-          if (fr < 10 || fr >= 15) return;
-          const hp = handPos(f), reach = 300 * Math.min(1, (fr - 9) / 3);
-          FX.slash(hp.x + f.facing * reach / 2, hp.y, 0, reach, '#c0c4cc', 2, 3);
+          if (fr !== 12) return;
+          Sound.play('swish');
+          spawnProj(f, {
+            x: f.x + f.facing * 40, y: f.y - 105, vx: f.facing * 17, r: 46, life: 120, pierce: true, hitEvery: 9, wallKill: false, dir: f.facing,
+            hits: { dmg: 30, kb: 5, stun: 18, fx: 'slash', color: '#d7dde6', hitstop: 3, noScale: true, blood: 4 },
+            tick(e) {
+              if (e.age > 22) e.vx = U.clamp(e.vx + (f.x > e.x ? 1.1 : -1.1), -18, 18);
+              e.y = U.lerp(e.y, f.y - 105, 0.08);
+              if (e.age % 3 === 0) Sound.play('whoosh');
+              if (e.age > 30 && Math.abs(e.x - f.x) < 40) e.kill('caught');
+            },
+            render(ctx, e) {
+              ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.age * 0.55 * e.dir);
+              ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(215,221,230,0.25)'; ctx.lineWidth = 10;
+              ctx.beginPath(); ctx.arc(0, 0, 44, 0, 6.283); ctx.stroke();
+              ctx.globalCompositeOperation = 'source-over';
+              ctx.fillStyle = '#d7dde6'; ctx.strokeStyle = '#07070c'; ctx.lineWidth = 2;
+              ctx.beginPath(); ctx.moveTo(-6, -8); ctx.lineTo(48, -6); ctx.lineTo(58, 0); ctx.lineTo(48, 6); ctx.lineTo(-6, 8); ctx.closePath(); ctx.fill(); ctx.stroke();
+              ctx.strokeStyle = '#c4122f'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(-26, 0); ctx.lineTo(-8, 0); ctx.stroke();
+              ctx.restore();
+            },
+          });
         },
-        onHit(f, t) { t.x = f.x + f.facing * 62; t.clampWalls(); Sound.play('grab'); },
       },
     },
     {
       name: 'Blade Rush', icon: '刃', color: '#9be05a', cost: 0, cd: 180, ai: { min: 60, max: 260 },
-      desc: 'Blurs forward through the opponent, slicing them several times on the way past. Invulnerable while dashing.',
+      desc: 'Blurs forward through the opponent, dragging the greatsword through them several times on the way past. Invulnerable while dashing.',
       move: {
         id: 'bladerush', kind: 'special', startup: 6, active: 12, recovery: 16, keepVel: true, poses: ['dash', 'slash'], sfx: 'swish',
         hitbox: { x: -20, y: -130, w: 90, h: 110 }, hitEvery: 4, hit: { dmg: 22, kb: 2, stun: 18, fx: 'slash', color: '#9be05a', noScale: true, blood: 3 },
@@ -2384,33 +2423,32 @@ const JIN = {
       },
     },
     {
-      name: 'Knife Rain', icon: '雨', color: '#dfe6ee', cost: 0, cd: 200, ai: { min: 140, max: 700 },
-      desc: 'Flings six throwing knives in a wide fan.',
+      name: 'Ground Splitter', icon: '裂', color: '#c9b08a', cost: 0, cd: 240, ai: { min: 0, max: 600 },
+      desc: 'Slams the greatsword into the floor overhead. Anyone close gets crushed, and a fissure tears along the ground toward the opponent.',
       move: {
-        id: 'knives', kind: 'special', startup: 10, active: 1, recovery: 16, poses: ['castW', 'cast'],
+        id: 'splitter', kind: 'special', startup: 16, active: 4, recovery: 22, lunge: 5, poses: ['slashW', 'slash'], sfx: 'whoosh',
+        swing: { color: '#d7dde6', r: 120, w: 11, a0: -110, a1: 60 },
+        hitbox: { x: 0, y: -150, w: 140, h: 150 }, hit: { dmg: 70, kb: 8, kby: -12, launch: true, hitstop: 10, shake: 10, sfx: 'heavy', fx: 'slash', color: '#d7dde6', blood: 6 },
         onFrame(f, fr) {
-          if (fr !== 10) return;
-          Sound.play('swish');
-          for (let i = 0; i < 6; i++) {
-            const a = (i - 2.5) * 0.09;
-            spawnProj(f, {
-              x: f.x + f.facing * 30, y: f.y - 110, vx: f.facing * Math.cos(a) * 19, vy: Math.sin(a) * 19, r: 9, life: 60, clash: 1,
-              hits: { dmg: 16, kb: 2, stun: 12, fx: 'slash', color: '#dfe6ee', hitstop: 1, blood: 2 },
-              render(ctx, e) {
-                ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(Math.atan2(e.vy, e.vx));
-                ctx.strokeStyle = '#dfe6ee'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-12, 0); ctx.lineTo(10, 0); ctx.stroke();
-                ctx.strokeStyle = '#3a2a1a'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-18, 0); ctx.lineTo(-11, 0); ctx.stroke();
-                ctx.restore();
-              },
-            });
-          }
+          if (fr !== 16) return;
+          FX.shake(12); FX.debris(f.x + f.facing * 110, f.y, '#6a5a4a', 14, 11); FX.dust(f.x + f.facing * 110, f.y, 12); Sound.play('boom');
+          spawnProj(f, {
+            x: f.x + f.facing * 130, y: FLOOR - 22, vx: f.facing * 12, r: 26, life: 55, dir: f.facing,
+            hits: { dmg: 55, kb: 6, kby: -12, launch: true, hitstop: 6, color: '#c9b08a' },
+            tick(e) { if (e.age % 2 === 0) FX.debris(e.x, FLOOR, '#6a5a4a', 2, 7); },
+            render(ctx, e) {
+              ctx.save(); ctx.fillStyle = '#2a2018'; ctx.strokeStyle = '#c9b08a'; ctx.lineWidth = 2;
+              ctx.beginPath(); ctx.moveTo(e.x - e.dir * 60, FLOOR); ctx.lineTo(e.x - 6, FLOOR - 34); ctx.lineTo(e.x + 4, FLOOR - 14); ctx.lineTo(e.x + e.dir * 14, FLOOR - 40); ctx.lineTo(e.x + e.dir * 22, FLOOR); ctx.closePath(); ctx.fill(); ctx.stroke();
+              ctx.restore();
+            },
+          });
         },
       },
     },
     {
       name: 'Unbound Massacre', icon: '殺', color: '#9be05a', cost: 0, cd: 1500, ult: true, ai: { min: 0, max: 380 },
-      desc: 'ULTIMATE (no cursed energy needed, long cooldown — ready 15s into each round). Closes the gap in a blink and shreds the opponent with a storm of sickle cuts.',
-      move: rushComboMove({ id: 'massacre', title: 'ULTIMATE', sub: 'UNBOUND MASSACRE', color: '#9be05a', hitDmg: 22, finalDmg: 150 }),
+      desc: 'ULTIMATE (no cursed energy needed, long cooldown — ready 15s into each round). Closes the gap in a blink and buries the opponent under a storm of greatsword cuts.',
+      move: rushComboMove({ id: 'massacre', title: 'ULTIMATE', sub: 'UNBOUND MASSACRE', color: '#d7dde6', hitDmg: 24, finalDmg: 165 }),
     },
   ],
 };
@@ -2645,6 +2683,26 @@ const STORY = [
       { enemy: 'megumi', diff: 0.46, arena: 'school', text: 'A sorcerer with a shadow full of beasts. Get close enough to touch his soul.' },
       { enemy: 'yuta', diff: 0.62, arena: 'shibuya', text: 'Rika guards this one jealously. Repel her arm and land a Soul Touch on Yuta.' },
       { enemy: 'yuji', diff: 0.82, arena: 'shibuya', boss: true, text: 'Yuji Itadori. The only one who sees your soul. Prove that you are what he will become.' },
+    ],
+  },
+  {
+    id: 'jin', title: 'The Unbound', hero: 'jin', kanji: '無縛',
+    blurb: 'A man with no cursed energy takes contracts no sorcerer will touch — armed with nothing but a greatsword.',
+    fights: [
+      { enemy: 'g3', diff: 0.35, arena: 'womb', text: 'Your first contract: clear a nest of curses from the old detention center. They can\'t sense you coming — you have no cursed energy to give you away.' },
+      { enemy: 'finger', diff: 0.48, arena: 'womb', text: 'The client lied. Something far bigger lives at the bottom of the building. Keep moving and jump its shockwaves.' },
+      { enemy: 'mahito', diff: 0.62, arena: 'shibuya', text: 'A curse that reshapes souls is curious about a man without one worth touching. Keep him at the end of your blade.' },
+      { enemy: 'jogo', diff: 0.82, arena: 'shinjuku', boss: true, text: 'The bounty that started it all: a disaster curse of volcanoes. Get through the fire and finish the job.' },
+    ],
+  },
+  {
+    id: 'ayane', title: 'The Arbiter', hero: 'ayane', kanji: '裁定',
+    blurb: 'A magistrate turned sorcerer opens her own docket: every curse and killer will answer for what they have done.',
+    fights: [
+      { enemy: 'hanami', diff: 0.4, arena: 'school', text: 'Case one: a forest curse has been feeding on students. Gather your evidence — every blow you take makes the Verdict heavier.' },
+      { enemy: 'choso', diff: 0.52, arena: 'shibuya', text: 'Case two: the eldest Death Painting brother left blood all over Shibuya. Close in before his beams pin you down.' },
+      { enemy: 'yuta', diff: 0.64, arena: 'shinjuku', text: 'Case three: a special grade carrying a Queen of Curses. Answer Rika\'s reach with an Objection.' },
+      { enemy: 'sukuna', diff: 0.85, arena: 'shinjuku', boss: true, text: 'The final case: the King of Curses himself. Open the Hall of the Scales and hand down the sentence.' },
     ],
   },
 ];

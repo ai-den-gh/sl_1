@@ -145,14 +145,14 @@ const UI = {
           <div class="logo-sub"><span>CURSED</span> CLASH</div>
         </div>
         <nav class="menu-list">
-          <button class="nav" data-act="story"><b>Story Mode</b><small>Eight chapters against AI curses &amp; sorcerers</small></button>
+          <button class="nav" data-act="story"><b>Story Mode</b><small>Ten chapters against AI curses &amp; sorcerers</small></button>
           <button class="nav" data-act="online"><b>Online Battle</b><small>Fight a friend over the internet with a room code</small></button>
           <button class="nav" data-act="cpu"><b>Versus CPU</b><small>Quick match against the AI</small></button>
           <button class="nav" data-act="gallery"><b>Character Gallery</b><small>Techniques, passives &amp; cursed spirits</small></button>
           <button class="nav" data-act="controls"><b>Controls</b><small>Key bindings &amp; tips</small></button>
           <button class="nav" data-act="settings"><b>Settings</b><small>Audio, effects &amp; round rules</small></button>
         </nav>
-        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back · <span class="build">build 7 · ${ROSTER.length} fighters</span></div>
+        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back · <span class="build">build 8 · ${ROSTER.length} fighters</span></div>
       </div>`;
     s.querySelectorAll('[data-act]').forEach(b => { b.onclick = () => this.menuAct(b.dataset.act); });
   },
@@ -808,7 +808,7 @@ function charInfoHTML(d, keys, long) {
     ${long && d.bio ? `<p class="ci-bio">${d.bio}</p>` : ''}
     <p class="ci-style"><i>Style</i> ${d.style}</p>
     <p class="ci-pass"><i>Passive · ${d.passive.name}</i> ${d.passive.desc}</p>
-    ${long ? `<p class="ci-stats">HP ${d.hp || 1000} · Speed ${Math.round((d.speed || 1) * 100)}%${d.dash === 'teleport' ? ' · Teleport dash' : ''}${d.melee && d.melee.weapon ? ` · ${d.melee.weapon === 'sword' ? 'Katana' : 'Claws'}` : ''}</p>` : ''}
+    ${long ? `<p class="ci-stats">HP ${d.hp || 1000} · Speed ${Math.round((d.speed || 1) * 100)}%${d.dash === 'teleport' ? ' · Teleport dash' : ''}${d.melee && d.melee.weapon ? ` · ${d.melee.weaponName || (d.melee.weapon === 'sword' ? 'Katana' : 'Claws')}` : ''}</p>` : ''}
     <ul class="ci-tech">${tech}</ul></div>`;
 }
 
