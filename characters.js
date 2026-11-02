@@ -190,6 +190,7 @@ function eruption(f, x, o) {
 function makeDog(f, o) {
   return spawnSummon(f, {
     x: o.x, y: FLOOR, dir: o.dir, color: o.color, speed: o.speed, life: o.life, delay: o.delay || 0,
+    name: 'DIVINE DOG', hp: 70, maxHp: 70, hurtbox: e => ({ x: e.x - 28, y: e.y - 52, w: 56, h: 52 }),
     bites: o.bites || 2, cool: 0, layer: 'front',
     tick(e, t) {
       if (e.age < e.delay) { e.vx = 0; return; }
@@ -1452,6 +1453,7 @@ const MEGUMI = {
           Sound.play('zap');
           spawnSummon(f, {
             x: f.x, y: f.y - 120, life: Math.round(210 * f.summonMult()), dir: f.facing, charge: 0,
+            name: 'NUE', hp: 90, maxHp: 90, hurtbox: e => ({ x: e.x - 34, y: e.y - 24, w: 68, h: 46 }),
             tick(e, t) {
               const tx = t ? t.x : e.x;
               e.x = U.lerp(e.x, tx, 0.035); e.y = U.lerp(e.y, FLOOR - 330 + Math.sin(e.age * 0.07) * 14, 0.06);
@@ -1488,13 +1490,14 @@ const MEGUMI = {
           FX.smoke(tx, f.y - 10, '#1a1028', 6, 16, 14);
           spawnSummon(f, {
             x: tx, y: f.y, life: Math.round(75 * f.summonMult()), dir: f.facing, len: 0,
+            name: 'TOAD', hp: 100, maxHp: 100, hurtbox: e => ({ x: e.x - 34, y: e.y - 58, w: 68, h: 58 }),
             tick(e, t) {
               const k = e.age;
               if (!e.grab) {
                 e.len = k < 12 ? 0 : k < 26 ? (k - 12) / 14 * 380 : Math.max(0, 380 - (k - 26) * 30);
                 const tipX = e.x + e.dir * (20 + e.len), tipY = e.y - 34;
                 if (k >= 12 && k < 28 && t && t.state !== 'ko' && t.invuln <= 0 && U.circleRect(tipX, tipY, 16, t.hurtbox())) {
-                  e.grab = k; Sound.play('grab');
+                  e.grab = k; e.held = t; Sound.play('grab');
                   Combat.hit(f, t, { dmg: 20, stunAdd: 70, freeze: true, unblockable: true, kb: 0, hitstop: 4, x: tipX, y: tipY, dir: e.dir });
                 }
               } else if (t) {
@@ -1503,7 +1506,7 @@ const MEGUMI = {
                 if (k - e.grab > 24) e.grab = 0, e.len = 0, e.life = Math.min(e.life, e.age + 10);
               }
             },
-            onEnd(e) { FX.smoke(e.x, e.y - 20, '#1a1028', 8, 18, 16); },
+            onEnd(e) { FX.smoke(e.x, e.y - 20, '#1a1028', 8, 18, 16); if (e.slain && e.held && e.held.stun > 1) e.held.stun = 1; },
             render(ctx, e) {
               ctx.save(); ctx.globalAlpha = Math.min(1, e.age / 6, (e.life - e.age) / 10);
               if (e.len > 0) {
@@ -1617,6 +1620,182 @@ const MEGUMI = {
               const bw = 110, bx = e.x - bw / 2, by = FLOOR - 335;
               ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(bx - 2, by - 2, bw + 4, 11);
               ctx.fillStyle = '#f2efe6'; ctx.fillRect(bx, by, bw * Math.max(0, e.hp) / e.maxHp, 7);
+              ctx.restore();
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Rabbit Escape', icon: '兎', color: '#f2f2f6', cost: 15, cd: 300, ai: { min: 0, max: 160 },
+      desc: 'A swarm of rabbits floods the ground while Megumi hops away. The rabbits soak up incoming projectiles and attacks until they are destroyed.',
+      move: {
+        id: 'rabbits', kind: 'special', startup: 6, active: 1, recovery: 12, poses: ['sign', 'jump'],
+        onFrame(f, fr) {
+          if (fr !== 6) return;
+          Sound.play('whoosh'); FX.smoke(f.x, f.y - 20, '#1a1028', 10, 30, 18);
+          const ox = f.x;
+          f.invuln = Math.max(f.invuln, 20); f.vx = -f.facing * 13; f.vy = -9; f.onGround = false;
+          for (let i = 0; i < 12; i++) spawnSummon(f, {
+            x: ox + U.rand(-70, 70), y: FLOOR, life: Math.round(U.rand(130, 170) * f.summonMult()), r: 14, clash: 1, dir: U.pick([-1, 1]),
+            name: 'RABBIT', hp: 10, maxHp: 10, noBar: true, hurtbox: e => ({ x: e.x - 12, y: e.y - 22, w: 24, h: 22 }),
+            tick(e) {
+              e.hop = (e.hop || U.randInt(0, 20)) + 1;
+              if (e.hop % 22 === 0) e.dir = Math.random() < 0.3 ? -e.dir : e.dir;
+              e.x = U.clamp(e.x + e.dir * 1.6, World.left + 10, World.right - 10);
+              e.y = FLOOR - Math.abs(Math.sin(e.hop * 0.28)) * 14;
+              e.vy = 0;
+            },
+            onEnd(e) { FX.smoke(e.x, FLOOR - 10, '#1a1028', 2, 6, 8); },
+            render(ctx, e) {
+              ctx.save(); ctx.translate(e.x, e.y); ctx.scale(e.dir, 1);
+              ctx.globalAlpha = Math.min(1, (e.life - e.age) / 10);
+              ctx.fillStyle = '#f2f2f6'; ctx.strokeStyle = '#16161c'; ctx.lineWidth = 1.5;
+              ctx.beginPath(); ctx.ellipse(0, -8, 10, 7, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+              ctx.beginPath(); ctx.arc(8, -14, 5, 0, 6.283); ctx.fill(); ctx.stroke();
+              ctx.beginPath(); ctx.ellipse(7, -23, 1.8, 6, -0.2, 0, 6.283); ctx.ellipse(10, -22, 1.8, 6, 0.2, 0, 6.283); ctx.fill(); ctx.stroke();
+              ctx.fillStyle = '#16161c'; ctx.fillRect(9, -15, 1.6, 1.6);
+              ctx.restore();
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Great Serpent', icon: '蛇', color: '#7fae6a', cost: 30, cd: 420, ai: { min: 0, max: 700 },
+      desc: 'A giant serpent bursts from the ground beneath the opponent, seizes them in its jaws and slams them down. Destroy it to break free.',
+      move: {
+        id: 'serpent', kind: 'special', startup: 12, active: 1, recovery: 18, poses: ['sign', 'point'],
+        onFrame(f, fr, t) {
+          if (fr !== 12 || !t) return;
+          const gy = World.groundAt(t.x, t.y);
+          spawnSummon(f, {
+            x: t.x, y: gy, life: 120, delay: 26, rise: 0, name: 'GREAT SERPENT', hp: 160, maxHp: 160,
+            hurtbox: e => ({ x: e.x - 26, y: e.y - 40 - e.rise * 170, w: 52, h: 40 + e.rise * 170 }),
+            tick(e, tt) {
+              if (e.age < e.delay) { if (tt) e.x = U.lerp(e.x, tt.x, 0.06); return; }
+              e.rise = Math.min(1, (e.age - e.delay) / 8);
+              if (e.age === e.delay) {
+                Sound.play('roar'); FX.debris(e.x, e.y, '#3a4a2a', 12, 10); FX.shake(10);
+                if (tt && tt.state !== 'ko' && tt.invuln <= 0 && Math.abs(tt.x - e.x) < 60 && Math.abs(tt.y - e.y) < 120) {
+                  e.held = tt;
+                  Combat.hit(f, tt, { dmg: 30, stunAdd: 80, freeze: true, unblockable: true, kb: 0, hitstop: 6, x: e.x, y: tt.midY, dir: dirTo(f, tt) });
+                }
+              }
+              const h = e.held;
+              if (h && h.state === 'stun') {
+                const k = e.age - e.delay;
+                if (k < 40) { h.x = e.x; h.y = e.y - Math.min(130, k * 4); }
+                if (k === 40) {
+                  h.y = e.y; h.stun = 0; h.frozen = false; h.setState('idle');
+                  Combat.hit(f, h, { dmg: 70, kb: 6, kby: -6, launch: true, unblockable: true, sureHit: true, hitstop: 12, shake: 14, sfx: 'heavy', x: h.x, y: h.y - 30, dir: dirTo(f, h) });
+                  FX.dust(h.x, h.y, 14); e.held = null; e.life = Math.min(e.life, e.age + 16);
+                }
+              } else if (!h && e.age > e.delay + 30) e.life = Math.min(e.life, e.age + 14);
+            },
+            onEnd(e) { FX.smoke(e.x, e.y - 60, '#1a1028', 10, 26, 20); if (e.slain && e.held && e.held.stun > 1) { e.held.stun = 1; e.held.y = e.y; } },
+            render(ctx, e) {
+              if (e.age < e.delay) {
+                ctx.save(); ctx.globalAlpha = 0.4 + 0.3 * Math.sin(e.age * 0.6) ** 2; ctx.fillStyle = '#4a6a3a';
+                ctx.beginPath(); ctx.ellipse(e.x, e.y + 2, 46, 8, 0, 0, 6.283); ctx.fill(); ctx.restore();
+                return;
+              }
+              const top = e.y - 40 - e.rise * (e.held ? Math.min(130, (e.age - e.delay) * 4) + 40 : 170);
+              ctx.save(); ctx.globalAlpha = Math.min(1, (e.life - e.age) / 12);
+              ctx.lineCap = 'round'; ctx.strokeStyle = '#16200f'; ctx.lineWidth = 38;
+              ctx.beginPath(); ctx.moveTo(e.x, e.y + 10); ctx.bezierCurveTo(e.x - 40, e.y - 60, e.x + 40, top + 60, e.x, top); ctx.stroke();
+              ctx.strokeStyle = '#5f8a4a'; ctx.lineWidth = 32; ctx.stroke();
+              ctx.fillStyle = '#5f8a4a'; ctx.strokeStyle = '#16200f'; ctx.lineWidth = 3;
+              ctx.beginPath(); ctx.ellipse(e.x + 6, top - 6, 30, 20, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+              ctx.fillStyle = '#ffd34d'; ctx.beginPath(); ctx.arc(e.x + 18, top - 12, 4, 0, 6.283); ctx.fill();
+              ctx.restore();
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Piercing Ox', icon: '牛', color: '#a0785a', cost: 35, cd: 400, ai: { min: 80, max: 1000 },
+      desc: 'A shadow ox charges across the whole arena, gaining speed as it goes and goring everyone in its path. Can be destroyed mid-charge.',
+      move: {
+        id: 'ox', kind: 'special', startup: 14, active: 1, recovery: 16, poses: ['sign', 'cast'],
+        onFrame(f, fr) {
+          if (fr !== 14) return;
+          Sound.play('roar'); FX.smoke(f.x - f.facing * 40, FLOOR - 30, '#1a1028', 10, 26, 20);
+          spawnProj(f, {
+            x: f.x - f.facing * 30, y: FLOOR - 50, vx: f.facing * 4, r: 44, life: 140, pierce: true, wallKill: true, dir: f.facing,
+            name: 'PIERCING OX', hp: 200, maxHp: 200, hurtbox: e => ({ x: e.x - 50, y: FLOOR - 92, w: 100, h: 92 }),
+            hits: { dmg: 85, kb: 16, kby: -11, launch: true, hitstop: 10, shake: 12, sfx: 'heavy' },
+            tick(e) {
+              e.vx = U.clamp(e.vx + e.dir * 0.55, -17, 17);
+              if (e.age % 3 === 0) FX.dust(e.x - e.dir * 40, FLOOR, 2);
+            },
+            onEnd(e) { FX.smoke(e.x, FLOOR - 40, '#1a1028', 10, 30, 22); },
+            render(ctx, e) {
+              ctx.save(); ctx.translate(e.x, FLOOR); ctx.scale(e.dir, 1);
+              const g = Math.sin(e.age * 0.6) * 9;
+              ctx.strokeStyle = '#120c08'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+              for (const [lx, ph] of [[-30, 1], [-18, -1], [18, -1], [30, 1]]) { ctx.beginPath(); ctx.moveTo(lx, -40); ctx.lineTo(lx + g * ph, 0); ctx.stroke(); }
+              ctx.fillStyle = '#3a2a22'; ctx.strokeStyle = '#120c08'; ctx.lineWidth = 3;
+              ctx.beginPath(); ctx.ellipse(0, -52, 48, 26, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+              ctx.beginPath(); ctx.ellipse(46, -58, 18, 15, 0.3, 0, 6.283); ctx.fill(); ctx.stroke();
+              ctx.strokeStyle = '#e8e2d0'; ctx.lineWidth = 5;
+              ctx.beginPath(); ctx.moveTo(48, -70); ctx.quadraticCurveTo(64, -86, 76, -78); ctx.moveTo(40, -70); ctx.quadraticCurveTo(46, -90, 60, -94); ctx.stroke();
+              ctx.fillStyle = '#ff3a3a'; ctx.beginPath(); ctx.arc(54, -60, 3, 0, 6.283); ctx.fill();
+              ctx.restore();
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Max Elephant', icon: '象', color: '#6fb6ff', cost: 45, cd: 600, ai: { min: 0, max: 1100 },
+      desc: 'A colossal elephant appears above the opponent and floods the area with a torrent of water, then crashes down. Destroy it to stop the flood.',
+      move: {
+        id: 'elephant', kind: 'special', startup: 16, active: 1, recovery: 18, poses: ['sign', 'upper'],
+        onFrame(f, fr, t) {
+          if (fr !== 16 || !t) return;
+          Sound.play('roar');
+          spawnSummon(f, {
+            x: U.clamp(t.x, World.left + 80, World.right - 80), y: FLOOR - 340, life: 130, name: 'MAX ELEPHANT', hp: 220, maxHp: 220,
+            hurtbox: e => ({ x: e.x - 70, y: e.y - 50, w: 140, h: 100 }),
+            tick(e, tt) {
+              if (e.age < 90) {
+                if (tt) e.x = U.lerp(e.x, tt.x, 0.015);
+                if (e.age % 2 === 0) for (let i = 0; i < 3; i++) FX.add({ type: 'spark', x: e.x + 40 + U.rand(-12, 12), y: e.y + 40, vx: U.rand(-1, 1), vy: U.rand(10, 16), life: 24, size: 4, color: U.pick(['#6fb6ff', '#bfe6ff', '#ffffff']) });
+                for (const v of World.enemies(f)) {
+                  if (v.state === 'ko' || Math.abs(v.x - (e.x + 40)) > 70 || e.age % 8) continue;
+                  Combat.hit(f, v, { dmg: 9, kb: (v.x >= e.x + 40 ? 1 : -1) * 2, stun: 10, hitstop: 0, noScale: true, quiet: true, color: '#6fb6ff', sfx: 'tick', x: v.x, y: v.midY, dir: v.x >= e.x + 40 ? 1 : -1 });
+                }
+                return;
+              }
+              e.vy = Math.min((e.vy || 0) + 1.4, 24); e.y += e.vy;
+              if (e.y >= FLOOR - 50) {
+                FX.explosion(e.x, FLOOR - 30, 110, ['#ffffff', '#bfe6ff', '#6fb6ff']); FX.shake(18); FX.debris(e.x, FLOOR, '#4a4a5a', 14, 12); Sound.play('boom');
+                for (const v of World.enemies(f)) if (v.state !== 'ko' && Math.abs(v.x - e.x) < 130 && v.y > FLOOR - 200)
+                  Combat.hit(f, v, { dmg: 80, kb: 12, kby: -12, launch: true, hitstop: 10, x: v.x, y: v.midY, dir: v.x >= e.x ? 1 : -1 });
+                e.kill('landed');
+              }
+            },
+            onEnd(e, why) { if (why !== 'landed') FX.smoke(e.x, e.y, '#1a1028', 12, 40, 26); },
+            render(ctx, e) {
+              ctx.save(); ctx.globalAlpha = Math.min(1, e.age / 10);
+              if (e.age < 90) {
+                const g = ctx.createLinearGradient(0, e.y + 40, 0, FLOOR);
+                g.addColorStop(0, 'rgba(160,210,255,0.9)'); g.addColorStop(1, 'rgba(80,150,255,0.5)');
+                ctx.fillStyle = g; ctx.fillRect(e.x + 40 - 22 - Math.sin(e.age * 0.4) * 3, e.y + 40, 44, FLOOR - e.y - 40);
+                ctx.fillStyle = 'rgba(150,200,255,0.5)'; ctx.beginPath(); ctx.ellipse(e.x + 40, FLOOR, 90, 10, 0, 0, 6.283); ctx.fill();
+              }
+              ctx.translate(e.x, e.y);
+              ctx.fillStyle = '#7a7f8a'; ctx.strokeStyle = '#1a1c22'; ctx.lineWidth = 3;
+              for (const lx of [-46, -18, 18, 46]) { ctx.fillRect(lx - 9, 20, 18, 32); ctx.strokeRect(lx - 9, 20, 18, 32); }
+              ctx.beginPath(); ctx.ellipse(0, 0, 70, 42, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+              ctx.beginPath(); ctx.ellipse(48, -6, 30, 30, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+              ctx.fillStyle = '#8a8f9a'; ctx.beginPath(); ctx.ellipse(34, -6, 20, 26, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+              ctx.strokeStyle = '#1a1c22'; ctx.lineWidth = 12; ctx.lineCap = 'round';
+              ctx.beginPath(); ctx.moveTo(70, 4); ctx.quadraticCurveTo(84, 30, 40, 42); ctx.stroke();
+              ctx.strokeStyle = '#7a7f8a'; ctx.lineWidth = 8; ctx.stroke();
+              ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(60, -14, 3, 0, 6.283); ctx.fill();
               ctx.restore();
             },
           });
@@ -2077,10 +2256,312 @@ const CHOSO = {
   ],
 };
 
+/* ---------------------------------------------------------------- JIN AKAGAMI (original) */
+
+// A rush-in combo used by Jin's ultimate: dash, lock the target, flurry, finisher.
+function rushComboMove(o) {
+  return {
+    id: o.id, kind: 'ult', total: 400, startup: 400, active: 0, recovery: 0,
+    onStart(f) { FX.banner(o.title, o.sub, o.color, 100); FX.slow(25, 0.4); f.mvars.phase = 'rush'; },
+    getPose(f, fr) {
+      const v = f.mvars;
+      if (v.phase === 'rush') return fr < 10 ? POSES.slashW : POSES.dash;
+      if (v.phase === 'flurry') return POSES[['slash', 'slash2', 'kick', 'slash'][Math.floor((fr - v.t0) / 6) % 4]];
+      return (fr - v.t0) < 70 ? POSES.slashW : POSES.slash;
+    },
+    onFrame(f, fr, t) {
+      const v = f.mvars;
+      f.invuln = Math.max(f.invuln, 3);
+      if (v.phase === 'rush') {
+        if (fr >= 10) {
+          f.vx = f.facing * 17;
+          if (fr % 2 === 0) FX.ghost(f, o.color);
+          if (t && t.state !== 'ko' && Math.abs(t.x - f.x) < 95 && Math.abs(t.y - f.y) < 130) { v.phase = 'flurry'; v.t0 = fr; t.applyStun(110, true, true); f.vx = 0; }
+        }
+        if (fr > 40 && v.phase === 'rush') { f.invuln = 0; f.endMove(); }
+        return;
+      }
+      const k = fr - v.t0;
+      f.vx = 0;
+      if (!t || t.state === 'ko') { f.endMove(); return; }
+      if (v.phase === 'flurry') {
+        t.x = f.x + f.facing * 55; t.clampWalls();
+        if (k % 6 === 2 && k < 60) {
+          FX.slash(t.x + U.rand(-20, 20), t.midY + U.rand(-30, 30), U.rand(-1, 1), 90, o.color, 4, 10);
+          Combat.hit(f, t, { dmg: o.hitDmg, kb: 0, stun: 10, unblockable: true, sureHit: true, noScale: true, hitstop: 2, shake: 3, sfx: 'slash', fx: 'slash', color: o.color, blood: 3, x: t.x, y: t.midY, dir: f.facing });
+        }
+        if (k >= 64) v.phase = 'final';
+        return;
+      }
+      if (k === 74) {
+        t.stun = 0; t.frozen = false; t.setState('idle');
+        Combat.hit(f, t, { dmg: o.finalDmg, kb: 17, kby: -13, launch: true, unblockable: true, sureHit: true, noScale: true, hitstop: 16, shake: 16, fx: 'cleave', sfx: 'slash', blood: 16, dir: f.facing });
+      }
+      if (k >= 92) { f.invuln = 10; f.endMove(); }
+    },
+  };
+}
+
+const JIN = {
+  id: 'jin', name: 'Jin Akagami', short: 'JIN', title: 'The Unbound', kanji: '赤髪迅', color: '#9be05a',
+  style: 'A sorcerer with no cursed energy at all — pure speed, a chain-sickle, and zero hesitation.',
+  bio: 'Born without a drop of cursed energy, Jin trained his body until curses could no longer keep up. He fights with a chain-sickle and a pocket full of throwing knives.',
+  passive: { name: 'Zero Cursed Energy', desc: 'Jin has no cursed energy: his techniques cost nothing and run on cooldowns only. He moves 20% faster, his melee hits 20% harder, and domain sure-hits deal him half damage.' },
+  hp: 1000, speed: 1.2, noCE: true, initCd: { 4: 900 },
+  melee: { weapon: 'sword', reach: 18, power: 1.0 },
+  look: { skin: '#e8c8b0', top: '#3e4a3a', pants: '#22262c', accent: '#9be05a', eye: '#2a2a2a' },
+  aiStyle: { pref: 95 },
+  dmgMult(f, h) { return h.melee ? 1.2 : 1; },
+  onIncoming(f, dmg, h) { return { dmg: h.type === 'domain' ? dmg * 0.5 : dmg }; },
+  drawHair(g, hx, hy, r) {
+    const { ctx, col, OL } = g;
+    drawSpikyHair(g, hx, hy, r, [[-50, 4, 14], [-20, 6, 13], [10, 7, 13], [40, 6, 13], [70, 5, 13], [100, 4, 13]], '#b8bcc4');
+    // red headband with trailing ties
+    ctx.save(); ctx.beginPath(); ctx.arc(hx, hy, r + 0.5, 0, 6.283); ctx.clip();
+    ctx.fillStyle = col('#c4122f'); ctx.fillRect(hx - r - 2, hy - 9, r * 2 + 4, 5);
+    ctx.restore();
+    ctx.strokeStyle = col('#c4122f'); ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(hx - r + 1, hy - 7); ctx.lineTo(hx - r - 12, hy - 2); ctx.moveTo(hx - r + 1, hy - 6); ctx.lineTo(hx - r - 9, hy + 5); ctx.stroke();
+  },
+  drawWeapon(g) {
+    const { ctx, sk, col, OL } = g, e = sk.aF[1], h = sk.aF[2];
+    let dx = h[0] - e[0], dy = h[1] - e[1];
+    const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
+    const end = [h[0] + dx * 22, h[1] + dy * 22];
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = OL; ctx.lineWidth = 6; lineTo2(ctx, h, end);
+    ctx.strokeStyle = col('#5a3a24'); ctx.lineWidth = 4; lineTo2(ctx, h, end);
+    // the sickle blade hooks off the end of the handle
+    ctx.strokeStyle = col('#dfe6ee'); ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(end[0], end[1]); ctx.quadraticCurveTo(end[0] + dx * 14 - dy * 4, end[1] + dy * 14 + dx * 4, end[0] - dy * 18, end[1] + dx * 18); ctx.stroke();
+    // chain dangling from the pommel
+    ctx.strokeStyle = col('#8a8f9a'); ctx.lineWidth = 1.5; ctx.setLineDash([3, 2]);
+    ctx.beginPath(); ctx.moveTo(h[0], h[1]); ctx.quadraticCurveTo(h[0] - dx * 10, h[1] + 20, h[0] - 14, h[1] + 26); ctx.stroke();
+    ctx.setLineDash([]);
+  },
+  abilities: [
+    {
+      name: 'Chain Lash', icon: '鎖', color: '#c0c4cc', cost: 0, cd: 150, ai: { min: 90, max: 300 },
+      desc: 'Hurls the chain-sickle at long range and yanks whoever it catches right up to Jin.',
+      move: {
+        id: 'chainlash', kind: 'special', startup: 10, active: 5, recovery: 18, poses: ['castW', 'point'], sfx: 'swish',
+        hitbox: { x: 0, y: -128, w: 300, h: 42 }, hit: { dmg: 45, kb: 0, stun: 32, color: '#c0c4cc' },
+        onFrame(f, fr) {
+          if (fr < 10 || fr >= 15) return;
+          const hp = handPos(f), reach = 300 * Math.min(1, (fr - 9) / 3);
+          FX.slash(hp.x + f.facing * reach / 2, hp.y, 0, reach, '#c0c4cc', 2, 3);
+        },
+        onHit(f, t) { t.x = f.x + f.facing * 62; t.clampWalls(); Sound.play('grab'); },
+      },
+    },
+    {
+      name: 'Blade Rush', icon: '刃', color: '#9be05a', cost: 0, cd: 180, ai: { min: 60, max: 260 },
+      desc: 'Blurs forward through the opponent, slicing them several times on the way past. Invulnerable while dashing.',
+      move: {
+        id: 'bladerush', kind: 'special', startup: 6, active: 12, recovery: 16, keepVel: true, poses: ['dash', 'slash'], sfx: 'swish',
+        hitbox: { x: -20, y: -130, w: 90, h: 110 }, hitEvery: 4, hit: { dmg: 22, kb: 2, stun: 18, fx: 'slash', color: '#9be05a', noScale: true, blood: 3 },
+        onFrame(f, fr) {
+          if (fr >= 6 && fr < 18) { f.vx = f.facing * 19; f.invuln = Math.max(f.invuln, 2); if (fr % 2 === 0) FX.ghost(f, '#9be05a'); }
+          if (fr === 18) f.vx *= 0.2;
+        },
+      },
+    },
+    {
+      name: 'Smoke Vanish', icon: '煙', color: '#9aa0b0', cost: 0, cd: 300, ai: { min: 0, max: 600 },
+      desc: 'Pops a smoke bomb, vanishes, and reappears behind the nearest enemy with a launching slash.',
+      move: {
+        id: 'smoke', kind: 'special', startup: 18, active: 4, recovery: 18, poses: ['block', 'slash'],
+        hitbox: { x: 0, y: -140, w: 90, h: 110 }, hit: { dmg: 70, kb: 10, kby: -11, launch: true, hitstop: 8, fx: 'slash', color: '#9be05a', blood: 8 },
+        onFrame(f, fr, t) {
+          if (fr === 2) { Sound.play('whoosh'); FX.smoke(f.x, f.y - 70, '#8a8a90', 16, 34, 26); }
+          if (fr < 16) f.invuln = Math.max(f.invuln, 2);
+          if (fr === 14 && t) {
+            f.x = t.x - t.facing * 60; f.clampWalls(); f.facing = t.x >= f.x ? 1 : -1;
+            FX.smoke(f.x, f.y - 70, '#8a8a90', 10, 24, 20);
+          }
+        },
+        getPose: (f, fr) => (fr < 14 ? POSES.block : fr < 18 ? POSES.slashW : POSES.slash),
+      },
+    },
+    {
+      name: 'Knife Rain', icon: '雨', color: '#dfe6ee', cost: 0, cd: 200, ai: { min: 140, max: 700 },
+      desc: 'Flings six throwing knives in a wide fan.',
+      move: {
+        id: 'knives', kind: 'special', startup: 10, active: 1, recovery: 16, poses: ['castW', 'cast'],
+        onFrame(f, fr) {
+          if (fr !== 10) return;
+          Sound.play('swish');
+          for (let i = 0; i < 6; i++) {
+            const a = (i - 2.5) * 0.09;
+            spawnProj(f, {
+              x: f.x + f.facing * 30, y: f.y - 110, vx: f.facing * Math.cos(a) * 19, vy: Math.sin(a) * 19, r: 9, life: 60, clash: 1,
+              hits: { dmg: 16, kb: 2, stun: 12, fx: 'slash', color: '#dfe6ee', hitstop: 1, blood: 2 },
+              render(ctx, e) {
+                ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(Math.atan2(e.vy, e.vx));
+                ctx.strokeStyle = '#dfe6ee'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-12, 0); ctx.lineTo(10, 0); ctx.stroke();
+                ctx.strokeStyle = '#3a2a1a'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-18, 0); ctx.lineTo(-11, 0); ctx.stroke();
+                ctx.restore();
+              },
+            });
+          }
+        },
+      },
+    },
+    {
+      name: 'Unbound Massacre', icon: '殺', color: '#9be05a', cost: 0, cd: 1500, ult: true, ai: { min: 0, max: 380 },
+      desc: 'ULTIMATE (no cursed energy needed, long cooldown — ready 15s into each round). Closes the gap in a blink and shreds the opponent with a storm of sickle cuts.',
+      move: rushComboMove({ id: 'massacre', title: 'ULTIMATE', sub: 'UNBOUND MASSACRE', color: '#9be05a', hitDmg: 22, finalDmg: 150 }),
+    },
+  ],
+};
+
+/* ---------------------------------------------------------------- AYANE KUJO (original) */
+
+function drawScalesBg(ctx, d, a) {
+  ctx.save(); ctx.globalAlpha = a;
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#0e0c08'); g.addColorStop(1, '#3a3020');
+  ctx.fillStyle = g; ctx.fillRect(-30, -30, W + 60, H + 60);
+  // columns of a vast, dim hall
+  ctx.fillStyle = 'rgba(200,180,120,0.12)';
+  for (let i = 0; i < 8; i++) ctx.fillRect(40 + i * 170, 60, 40, FLOOR - 60);
+  // a giant balance scale hanging over the arena, tilting with the evidence
+  const tilt = Math.sin(d.age * 0.03) * 0.08 + Math.min(0.3, (d.owner.evidence || 0) * 0.03);
+  ctx.strokeStyle = '#c9a23a'; ctx.lineWidth = 8;
+  ctx.beginPath(); ctx.moveTo(W / 2, 40); ctx.lineTo(W / 2, 220); ctx.stroke();
+  ctx.save(); ctx.translate(W / 2, 80); ctx.rotate(tilt);
+  ctx.beginPath(); ctx.moveTo(-260, 0); ctx.lineTo(260, 0); ctx.stroke();
+  ctx.lineWidth = 2;
+  for (const sx of [-260, 260]) {
+    ctx.beginPath(); ctx.moveTo(sx, 0); ctx.lineTo(sx - 50, 110); ctx.moveTo(sx, 0); ctx.lineTo(sx + 50, 110); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(sx, 112, 56, 12, 0, 0, Math.PI); ctx.fillStyle = 'rgba(201,162,58,0.5)'; ctx.fill(); ctx.stroke();
+  }
+  ctx.restore();
+  ctx.fillStyle = '#1a160e'; ctx.fillRect(-30, FLOOR, W + 60, H - FLOOR + 30);
+  ctx.strokeStyle = 'rgba(201,162,58,0.4)'; ctx.lineWidth = 2;
+  for (let x = 0; x < W; x += 80) { ctx.beginPath(); ctx.moveTo(x, FLOOR); ctx.lineTo(x - 30, H); ctx.stroke(); }
+  ctx.restore();
+}
+
+const AYANE = {
+  id: 'ayane', name: 'Ayane Kujo', short: 'AYANE', title: 'The Arbiter', kanji: '九条綾音', color: '#c9a23a',
+  style: 'A methodical counter-fighter: punishes attacks, binds opponents, and turns every blow she takes into evidence.',
+  bio: 'A former magistrate who awakened her technique mid-trial. She weighs every exchange, and her domain hands down a sentence proportional to the crimes committed against her.',
+  passive: { name: 'Due Process', desc: 'Every hit Ayane takes is logged as Evidence (up to 10, shown above her head). Her domain\'s Verdict deals 25 extra damage per piece of evidence.' },
+  hp: 1050, speed: 0.95, melee: { power: 1.15, reach: 14 },
+  look: { skin: '#f0d6c4', top: '#e8e6e0', pants: '#2a2a32', accent: '#c9a23a', eye: '#1a1a2a' },
+  aiStyle: { pref: 100 },
+  onIncoming(f, dmg) { if (dmg > 0) f.evidence = Math.min(10, (f.evidence || 0) + 1); return { dmg }; },
+  drawAura(ctx, f) {
+    if (!f.evidence || f.state === 'ko') return;
+    const h = headPos(f);
+    ctx.save(); ctx.font = '900 14px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#c9a23a';
+    ctx.fillText(`⚖ ${f.evidence}`, h.x, h.y - 52 * f.scale); ctx.restore();
+  },
+  drawHair(g, hx, hy, r) {
+    const { ctx, col, OL } = g;
+    // long low ponytail falling behind the shoulders
+    ctx.fillStyle = col('#1c2340'); ctx.strokeStyle = OL; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(hx - r + 2, hy + 2); ctx.quadraticCurveTo(hx - r - 14, hy + 26, hx - r - 4, hy + 44); ctx.lineTo(hx - r + 4, hy + 40); ctx.quadraticCurveTo(hx - r - 2, hy + 22, hx - r + 8, hy + 6); ctx.closePath(); ctx.fill(); ctx.stroke();
+    drawSpikyHair(g, hx, hy, r, [[-70, 3, 18], [-35, 4, 18], [0, 4, 18], [35, 4, 18], [70, 3, 18], [105, 3, 18]], '#1c2340');
+  },
+  drawTorso(g) {
+    const { ctx, sk, col } = g;
+    ctx.strokeStyle = col('#c9a23a'); ctx.lineWidth = 3;
+    lineTo2(ctx, sk.sh, [sk.sh[0] * 0.5, sk.sh[1] * 0.5]);
+  },
+  drawWeapon(g) {
+    const { ctx, sk, col, OL } = g, e = sk.aF[1], h = sk.aF[2];
+    let dx = h[0] - e[0], dy = h[1] - e[1];
+    const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
+    const end = [h[0] + dx * 30, h[1] + dy * 30];
+    ctx.strokeStyle = OL; ctx.lineWidth = 6; lineTo2(ctx, h, end);
+    ctx.strokeStyle = col('#6a4a2a'); ctx.lineWidth = 4; lineTo2(ctx, h, end);
+    // gavel head across the end of the handle
+    ctx.save(); ctx.translate(end[0], end[1]); ctx.rotate(Math.atan2(dy, dx));
+    ctx.fillStyle = col('#c9a23a'); ctx.strokeStyle = OL; ctx.lineWidth = 2;
+    ctx.fillRect(-6, -14, 12, 28); ctx.strokeRect(-6, -14, 12, 28);
+    ctx.restore();
+  },
+  abilities: [
+    {
+      name: 'Gavel Strike', icon: '槌', color: '#c9a23a', cost: 15, cd: 150, ai: { min: 0, max: 130 },
+      desc: 'Brings the gavel down overhead with a crack that sends a shockwave along the floor.',
+      move: {
+        id: 'gavel', kind: 'special', startup: 14, active: 4, recovery: 20, lunge: 6, poses: ['slashW', 'slash'], sfx: 'whoosh',
+        hitbox: { x: 0, y: -150, w: 110, h: 150 }, hit: { dmg: 85, kb: 9, kby: -11, launch: true, hitstop: 10, shake: 10, sfx: 'heavy', color: '#c9a23a' },
+        onFrame(f, fr) { if (fr === 14) { FX.dust(f.x + f.facing * 80, f.y, 12); FX.ring(f.x + f.facing * 80, f.y - 6, '#c9a23a', 80, 16, 3); FX.shake(6); } },
+      },
+    },
+    {
+      name: 'Objection!', icon: '異', color: '#ffd34d', cost: 20, cd: 300, ai: { min: 0, max: 200 },
+      desc: 'A counter stance. If struck during it, Ayane ignores the hit and punishes: the attacker is stunned and smashed. Domains and unblockable attacks go through.',
+      move: {
+        id: 'objection', kind: 'special', startup: 30, active: 0, recovery: 14, counter: 28, poses: ['block', 'block'],
+        onStart(f) { FX.text(f.x, f.y - 190, 'Objection...', '#ffd34d', 16, 30); },
+        onCounter(f, att) {
+          FX.text(f.x, f.y - 200, 'OBJECTION!', '#ffd34d', 34, 60); Sound.play('bf'); FX.flash('#ffd34d', 0.3); FX.shake(10);
+          f.invuln = Math.max(f.invuln, 20); f.endMove();
+          f.facing = att.x >= f.x ? 1 : -1;
+          Combat.hit(f, att, { dmg: 60, stunAdd: 55, unblockable: true, sureHit: true, kb: 4, hitstop: 10, color: '#ffd34d', x: att.x, y: att.midY, dir: f.facing });
+        },
+      },
+    },
+    {
+      name: 'Chains of Law', icon: '律', color: '#ffd34d', cost: 25, cd: 300, ai: { min: 100, max: 650 },
+      desc: 'Fires a golden chain that binds whoever it hits in place.',
+      move: {
+        id: 'lawchain', kind: 'special', startup: 12, active: 1, recovery: 18, poses: ['castW', 'point'],
+        onFrame(f, fr) {
+          if (fr !== 12) return;
+          Sound.play('grab');
+          const x0 = f.x + f.facing * 30;
+          spawnProj(f, {
+            x: x0, y: f.y - 110, vx: f.facing * 15, r: 16, life: 45, x0, clash: 1,
+            hits: { dmg: 25, stunAdd: 55, kb: 0, color: '#ffd34d', sfx: 'grab', hitstop: 4 },
+            render(ctx, e) {
+              ctx.save(); ctx.strokeStyle = '#ffd34d'; ctx.lineWidth = 3; ctx.setLineDash([7, 4]);
+              ctx.beginPath(); ctx.moveTo(e.x0, e.y); ctx.lineTo(e.x, e.y); ctx.stroke(); ctx.setLineDash([]);
+              ctx.fillStyle = '#ffd34d'; ctx.beginPath(); ctx.arc(e.x, e.y, 8, 0, 6.283); ctx.fill();
+              ctx.restore();
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Hall of the Scales', icon: '秤', color: '#c9a23a', cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 1280 },
+      desc: 'DOMAIN EXPANSION. Seals the opponent in a vast courtroom. After deliberation, the Verdict lands: 60 damage plus 25 per piece of Evidence, and Ayane recovers 40% of it as restitution.',
+      move: {
+        id: 'scales', kind: 'ult', startup: 60, active: 0, recovery: 0, poses: ['sign', 'sign'],
+        onStart(f) { f.invuln = 70; domainCutscene(f, 'scales', 'HALL OF THE SCALES'); FX.banner('DOMAIN EXPANSION', 'HALL OF THE SCALES', '#c9a23a', 130); FX.slow(40, 0.35); Sound.play('charge'); },
+        onFrame(f, fr) {
+          f.invuln = Math.max(f.invuln, 2);
+          if (fr !== 40) return;
+          Domains.start(f, {
+            type: 'scales', life: 200, bg: drawScalesBg,
+            onStart(d, t) { t.applyStun(150, true, true); FX.text(t.x, t.y - 185, 'ON TRIAL', '#ffd34d', 24, 70); },
+            tick(d, t) {
+              if (d.age !== 130 || !t || t.state === 'ko') return;
+              const dmg = 60 + 25 * (f.evidence || 0);
+              t.stun = 0; t.frozen = false; t.setState('idle');
+              FX.text(t.x, t.y - 200, 'GUILTY', '#ff4d5a', 40, 80); FX.flash('#ffd34d', 0.5); FX.shake(16);
+              Combat.hit(f, t, { dmg, kb: 13, kby: -12, launch: true, unblockable: true, sureHit: true, noScale: true, hitstop: 14, shake: 14, color: '#ffd34d', sfx: 'boom', type: 'domain', x: t.x, y: t.midY, dir: dirTo(f, t) });
+              f.hp = Math.min(f.maxHp, f.hp + Math.round(dmg * 0.4));
+              FX.text(f.x, f.y - 180, `+${Math.round(dmg * 0.4)}`, '#9be05a', 22, 50);
+              f.evidence = 0;
+            },
+          });
+        },
+      },
+    },
+  ],
+};
+
 /* ---------------------------------------------------------------- roster */
 
-const CHARS = { gojo: GOJO, sukuna: SUKUNA, yuji: YUJI, yuta: YUTA, megumi: MEGUMI, g4: CURSE_G4, g3: CURSE_G3, finger: FINGER_BEARER, hanami: HANAMI, jogo: JOGO, mahito: MAHITO, choso: CHOSO };
-const ROSTER = ['yuji', 'gojo', 'sukuna', 'yuta', 'megumi', 'mahito', 'jogo', 'choso'];
+const CHARS = { gojo: GOJO, sukuna: SUKUNA, yuji: YUJI, yuta: YUTA, megumi: MEGUMI, g4: CURSE_G4, g3: CURSE_G3, finger: FINGER_BEARER, hanami: HANAMI, jogo: JOGO, mahito: MAHITO, choso: CHOSO, jin: JIN, ayane: AYANE };
+const ROSTER = ['yuji', 'gojo', 'sukuna', 'yuta', 'megumi', 'mahito', 'jogo', 'choso', 'jin', 'ayane'];
 const CURSE_IDS = ['g4', 'g3', 'finger', 'hanami'];
 
 /* ---------------------------------------------------------------- Story Mode */

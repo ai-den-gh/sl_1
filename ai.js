@@ -5,7 +5,7 @@
    level 0..1 scales reaction time, blocking, dodging, combos and aggression.
    ========================================================================== */
 
-const AI_KEYS = ['left', 'right', 'up', 'down', 'basic', 'heavy', 's0', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 'dash'];
+const AI_KEYS = ['left', 'right', 'up', 'down', 'basic', 'heavy', 's0', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 'clash', 'dash'];
 
 class AIController {
   constructor(level = 0.5) {
@@ -20,7 +20,15 @@ class AIController {
   update() {
     for (const k of AI_KEYS) { this.pressed[k] = false; this.held[k] = false; }
     const f = this.f, o = f && World.opp(f);
-    if (!f || !o || !World.active || f.state === 'ko' || o.state === 'ko') return;
+    if (!f) return;
+    const c = World.clash;
+    if (c) {
+      // domain clash wheel: tap when the arrow sits in our zone
+      const i = c.a === f ? 0 : c.b === f ? 1 : -1;
+      if (i >= 0 && !c.lock[i] && Clash.inArc(c.ang + c.spd, c.arcs[i]) && Math.random() < 0.08 + 0.4 * this.level) this.press('clash');
+      return;
+    }
+    if (!o || !World.active || f.state === 'ko' || o.state === 'ko') return;
     const L = this.level, h = this.held;
     const dx = o.x - f.x, dist = Math.abs(dx);
     const toward = dx >= 0 ? 'right' : 'left', away = dx >= 0 ? 'left' : 'right';

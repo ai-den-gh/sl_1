@@ -13,9 +13,9 @@ let RS = 1; // render scale: canvas pixels per game unit
 
 const BINDS = {
   p1: { left: ['KeyA'], right: ['KeyD'], up: ['KeyW'], down: ['KeyS', 'Mouse2'], basic: ['KeyJ', 'Mouse0'], heavy: ['KeyK'],
-    s0: ['KeyU'], s1: ['KeyI'], s2: ['KeyO'], s3: ['KeyL'], s4: ['KeyH'], s5: ['KeyG'], s6: ['KeyY'], s7: ['KeyT'], dash: ['ShiftLeft'] },
+    s0: ['KeyU'], s1: ['KeyI'], s2: ['KeyO'], s3: ['KeyL'], s4: ['KeyH'], s5: ['KeyG'], s6: ['KeyY'], s7: ['KeyT'], s8: ['KeyR'], clash: ['Space'], dash: ['ShiftLeft'] },
   p2: { left: ['ArrowLeft'], right: ['ArrowRight'], up: ['ArrowUp'], down: ['ArrowDown'], basic: ['Numpad1', 'Period'], heavy: ['Numpad2', 'Slash'],
-    s0: ['Numpad4', 'KeyP'], s1: ['Numpad5', 'BracketLeft'], s2: ['Numpad6', 'BracketRight'], s3: ['Numpad7', 'Backslash'], s4: ['Numpad8', 'Quote'], s5: ['Numpad9', 'Semicolon'], s6: ['Numpad3', 'Minus'], s7: ['NumpadDecimal', 'Equal'], dash: ['Numpad0', 'ShiftRight'] },
+    s0: ['Numpad4', 'KeyP'], s1: ['Numpad5', 'BracketLeft'], s2: ['Numpad6', 'BracketRight'], s3: ['Numpad7', 'Backslash'], s4: ['Numpad8', 'Quote'], s5: ['Numpad9', 'Semicolon'], s6: ['Numpad3', 'Minus'], s7: ['NumpadDecimal', 'Equal'], s8: ['NumpadAdd', 'Digit0'], clash: ['Enter', 'NumpadEnter'], dash: ['Numpad0', 'ShiftRight'] },
 };
 BINDS.solo = {};
 for (const k in BINDS.p1) BINDS.solo[k] = BINDS.p1[k].concat(BINDS.p2[k]);
@@ -270,10 +270,10 @@ const Game = {
       { id: cfg.p2, team: 1, ai: cfg.p2ai ?? null, keys: 'p2', tag: cfg.p2ai != null ? 'CPU' : 'P2', boss: cfg.boss },
     ];
     World.fighters = roster.map((r, i) => {
-      const input = r.ai != null ? new AIController(r.ai) : new KeyController(BINDS[r.keys || 'p1']);
+      const input = r.input || (r.ai != null ? new AIController(r.ai) : new KeyController(BINDS[r.keys || 'p1']));
       const f = new Fighter(CHARS[r.id], i === 0 ? 0 : 1, input);
       f.team = r.team; f.tag = r.tag || (r.ai != null ? 'CPU' : 'P' + (i + 1));
-      f.keyLabels = r.ai != null ? KEY_LABELS.cpu : r.keys === 'p2' ? KEY_LABELS.p2 : KEY_LABELS.p1;
+      f.keyLabels = r.ai != null || (r.input && r.tag !== 'YOU') ? KEY_LABELS.cpu : r.keys === 'p2' ? KEY_LABELS.p2 : KEY_LABELS.p1;
       if (r.boss) f.maxHp = Math.round(f.maxHp * 1.1);
       return f;
     });
@@ -378,6 +378,19 @@ const Game = {
     const w = this.winner, fs = World.fighters, cfg = this.match.cfg;
     if (this.mode === 'demo') { this.startDemo(); return; }
     if (this.mode === 'story') { Story.onResult(this.winTeam === fs[0].team); return; }
+    if (this.mode === 'online') {
+      const youWon = fs.find(f => f.team === this.winTeam).tag === 'YOU';
+      Net.endMatch();
+      UI.showResult({
+        title: youWon ? 'YOU WIN' : 'YOU LOSE', color: youWon ? '#ffd34d' : '#ff3355', sub: `${w.def.name} — ${w.def.title}`,
+        stats: `${fs[0].def.short} ${fs[0].wins} &nbsp;–&nbsp; ${fs[1].wins} ${fs[1].def.short}`,
+        buttons: [
+          { label: 'Rematch', fn: () => { Game.startDemo(); Net.send({ t: 'reselect' }); Select.open('online'); } },
+          { label: 'Leave Room', fn: () => { Net.close(); this.toMenu(); } },
+        ],
+      });
+      return;
+    }
     const teams = [...new Set(fs.map(f => f.team))];
     const stats = fs.length === 2
       ? `${fs[0].def.short} ${fs[0].wins} &nbsp;–&nbsp; ${fs[1].wins} ${fs[1].def.short}`
@@ -393,11 +406,11 @@ const Game = {
   },
 
   timeLeft() { return World.settings.roundTime ? Math.ceil(this.timer / 60) : null; },
-  canPause() { return this.running && !this.paused && this.mode !== 'demo' && this.phase !== 'over'; },
+  canPause() { return this.running && !this.paused && this.mode !== 'demo' && this.mode !== 'online' && this.phase !== 'over'; },
   pause() { this.paused = true; Sound.play('select'); UI.show('pause', { back: () => this.resume() }); },
   resume() { this.paused = false; UI.show(null); },
   restart() { this.paused = false; this.startMatch(this.match.cfg); },
-  toMenu() { this.paused = false; this.startDemo(); UI.openMenu(0); },
+  toMenu() { this.paused = false; if (Net.ws) Net.close(); this.startDemo(); UI.openMenu(0); },
 
   startDemo() {
     const p1 = U.pick(ROSTER); let p2 = U.pick(ROSTER);
@@ -523,13 +536,18 @@ function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   if (Game.running && !Game.paused) {
-    if (World.cutscene && --World.cutscene.t <= 0) World.cutscene = null;
+    if (World.cutscene && !World.lockstep && --World.cutscene.t <= 0) World.cutscene = null;
     UI.tickReal();
     if (World.slowTimer > 0 && --World.slowTimer <= 0) World.timeScale = 1;
     acc += dt * World.timeScale;
     let n = 0;
-    while (acc >= STEP && n < 4) { acc -= STEP; n++; if (World.step()) Game.update(); }
-    if (n === 4) acc = 0;
+    if (Net.inMatch) {
+      // online: each frame waits until both players' inputs are in
+      while (acc >= STEP && n < 6) { if (!Net.tryStep()) { acc = Math.min(acc, STEP * 2); break; } acc -= STEP; n++; }
+    } else {
+      while (acc >= STEP && n < 4) { acc -= STEP; n++; if (World.step()) Game.update(); }
+      if (n === 4) acc = 0;
+    }
     Input.age();
   }
   render();

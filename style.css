@@ -156,7 +156,7 @@ kbd { display: inline-block; min-width: 1.8em; padding: 0.1em 0.4em; border: 1px
 .lobby small { margin-left: auto; color: var(--muted); }
 .sel-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.8em; margin: 0.9em 0; }
 .build { color: var(--gold); }
-.sel-card { --c: #fff; position: relative; width: 9em; background: var(--panel); border: 2px solid var(--line); border-radius: 0.4em; padding: 0.5em 0.4em 0.6em; }
+.sel-card { --c: #fff; position: relative; width: 8em; background: var(--panel); border: 2px solid var(--line); border-radius: 0.4em; padding: 0.5em 0.4em 0.6em; }
 .sel-card canvas { width: 6.5em; aspect-ratio: 1; display: block; margin: 0 auto; }
 .sel-name b { display: block; font-family: Impact, sans-serif; font-weight: 400; font-size: 1.15em; letter-spacing: 0.05em; color: var(--c); }
 .sel-name small { color: var(--muted); font-size: 0.72em; }
@@ -192,3 +192,14 @@ kbd { display: inline-block; min-width: 1.8em; padding: 0.1em 0.4em; border: 1px
 .res-sub { font-size: 1.3em; color: #d8dcf4; margin-top: 0.3em; }
 .res-stats { font-family: Impact, sans-serif; font-size: 2em; margin-top: 0.5em; color: var(--gold); }
 .center { text-align: center; }
+
+/* ---------- online lobby */
+.online-note { color: var(--muted); text-align: center; margin-bottom: 1em; line-height: 1.5; }
+.join-row { gap: 0.6em; }
+.room-in { flex: 1; font: inherit; font-size: 1.4em; letter-spacing: 0.4em; text-transform: uppercase; text-align: center; padding: 0.3em;
+  background: rgba(0, 0, 0, 0.4); color: var(--gold); border: 1px solid var(--line); border-radius: 0.3em; }
+.join-btn { padding: 0.6em 1.2em; background: #5a2ac8; border: 1px solid #8f6bff; border-radius: 0.3em; font-weight: 800; }
+.join-btn.focus { transform: scale(1.04); }
+.online-status { min-height: 3.2em; text-align: center; color: #cfd4f0; line-height: 1.6; }
+.online-status.err { color: #ff8a8a; }
+.online-status .code { font-family: Impact, sans-serif; font-size: 2.6em; letter-spacing: 0.2em; color: var(--gold); }

@@ -42,10 +42,12 @@ const World = {
   onKO: null,             // set by game.js
   settings: { shake: true, hitboxes: false, volume: 0.6, roundTime: 99, particles: 1, blood: true },
   cutscene: null,         // domain expansion hand-sign cutscene (freezes the fight)
+  clash: null,            // domain clash minigame (freezes the fight)
+  lockstep: false,        // true during online matches
 
   clear() {
     this.entities = []; this.particles = []; this.timers = [];
-    this.domain = null; this.banner = null; this.cutscene = null;
+    this.domain = null; this.banner = null; this.cutscene = null; this.clash = null;
     this.shake = 0; this.flash = 0; this.timeScale = 1; this.slowTimer = 0; this.hitstop = 0;
   },
   // Fighters on different teams are enemies. opp() is the nearest enemy, preferring ones still standing.
@@ -70,7 +72,16 @@ const World = {
 
   // One fixed 60Hz simulation tick. Returns false while frozen by hitstop.
   step() {
-    if (this.cutscene) return false;
+    if (this.cutscene) {
+      // in online lockstep the cutscene is timed in simulation frames so both players stay in sync
+      if (this.lockstep && --this.cutscene.t <= 0) this.cutscene = null;
+      return false;
+    }
+    if (this.clash) {
+      for (const f of this.fighters) if (f.input && f.input.update) f.input.update();
+      Clash.update(); updateParticles();
+      return false;
+    }
     if (this.hitstop > 0) { this.hitstop--; updateParticles(); return false; }
     this.frame++;
     for (const f of this.fighters) if (f.input && f.input.update) f.input.update();
@@ -523,20 +534,21 @@ class Fighter {
     this.abilities = def.abilities || [];
   }
   // Temporarily become another fighter (Yuji letting Sukuna take over).
-  transform(def, frames) { this.savedCd = this.cd; this.cd = [0, 0, 0, 0, 0, 0, 0, 0]; this.setDef(def); this.takeoverT = frames; }
-  revert() { this.setDef(this.baseDef); this.cd = this.savedCd || [0, 0, 0, 0, 0, 0, 0, 0]; this.takeoverT = 0; }
+  transform(def, frames) { this.savedCd = this.cd; this.cd = [0, 0, 0, 0, 0, 0, 0, 0, 0]; this.setDef(def); this.takeoverT = frames; }
+  revert() { this.setDef(this.baseDef); this.cd = this.savedCd || [0, 0, 0, 0, 0, 0, 0, 0, 0]; this.takeoverT = 0; }
 
   resetRound() {
     if (this.def !== this.baseDef) this.setDef(this.baseDef);
     this.takeoverT = 0; this.usedTakeover = false; this.split = null;
     this.x = this.spawnX ?? (this.side === 0 ? 420 : W - 420); this.y = FLOOR; this.prevY = FLOOR;
     this.vx = 0; this.vy = 0; this.facing = this.x < W / 2 ? 1 : -1; this.onGround = true;
-    this.hp = this.maxHp; this.hpTrail = this.maxHp; this.ce = 50; this.guard = 100;
+    this.hp = this.maxHp; this.hpTrail = this.maxHp; this.ce = this.def.noCE ? 0 : 50; this.guard = 100; this.evidence = 0;
     this.state = 'idle'; this.stateT = 0; this.move = null; this.mf = 0; this.mvars = {};
     this.hitList = new Set(); this.moveHit = false;
     this.hitstun = 0; this.stun = 0; this.frozen = false; this.stunImmune = 0; this.invuln = 0; this.juggles = 0;
     this.combo = 0; this.comboShow = 0; this.comboShowT = 0;
-    this.cd = [0, 0, 0, 0, 0, 0, 0, 0]; this.dashCd = 0; this.dashT = 0; this.airDash = true; this.jumps = 0; this.dropT = 0;
+    this.cd = [0, 0, 0, 0, 0, 0, 0, 0, 0]; if (this.def.initCd) for (const i in this.def.initCd) this.cd[i] = this.def.initCd[i];
+    this.dashCd = 0; this.dashT = 0; this.airDash = true; this.jumps = 0; this.dropT = 0;
     this.buf = null; this.bufT = 0; this.flashT = 0; this.noCeT = 0; this.anim = Math.random() * 100;
     this.pose = poseCopy(POSES.idle); this.buffs = {}; this.victory = false; this.eyesOpen = 0;
     this.copied = null; this.adapt = {}; this.adaptSpin = 0; this.slowT = 0;
@@ -569,7 +581,7 @@ class Fighter {
     if (this.buffs.regen) r *= 2;
     return r / 60;
   }
-  gainCe(n) { this.ce = Math.min(100, this.ce + n); }
+  gainCe(n) { if (!this.def.noCE) this.ce = Math.min(100, this.ce + n); }
   consume() { this.buf = null; this.bufT = 0; }
 
   update() {
@@ -593,7 +605,7 @@ class Fighter {
     if (this.bufT > 0 && --this.bufT === 0) this.buf = null;
     if (this.input && World.active && this.state !== 'ko') {
       const p = this.input.pressed;
-      for (const k of ['basic', 'heavy', 's0', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 'dash']) if (p[k]) { this.buf = k; this.bufT = 10; }
+      for (const k of ['basic', 'heavy', 's0', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 'dash']) if (p[k]) { this.buf = k; this.bufT = 10; }
     }
     if (this.def.passiveTick) this.def.passiveTick(this);
     if (this.buffs.redscale && this.anim % 4 === 0) FX.glow(this.x + U.rand(-18, 18), this.y - U.rand(10, 140) * this.scale, '#c4122f', 10, 16, 0, -1.4);
@@ -980,7 +992,27 @@ class Entity {
     this.dead = true;
     if (this.onEnd) this.onEnd(this, why);
   }
-  draw(ctx) { if (this.render) this.render(ctx, this); }
+  draw(ctx) {
+    if (this.render) this.render(ctx, this);
+    if (this.hp > 0 && this.hp < this.maxHp && this.hurtbox && !this.noBar) {
+      const b = this.hurtbox(this), bw = Math.max(40, b.w);
+      ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(b.x + b.w / 2 - bw / 2 - 1, b.y - 12, bw + 2, 6);
+      ctx.fillStyle = '#9be05a'; ctx.fillRect(b.x + b.w / 2 - bw / 2, b.y - 11, bw * this.hp / this.maxHp, 4);
+    }
+  }
+  // Summons with hp can be attacked and destroyed (see hitSummons).
+  takeHit(e, att, dmg, h) {
+    dmg = Math.round(dmg);
+    e.hp -= dmg;
+    const b = e.hurtbox(e), hx = b.x + b.w / 2, hy = b.y + b.h / 2;
+    FX.impact(hx, hy, h, dmg); Sound.play(dmg >= 60 ? 'heavy' : 'hit'); FX.hitstop(2);
+    FX.text(hx + U.rand(-10, 10), b.y - 16, dmg, '#ffffff', 16, 35);
+    if (e.hp <= 0) {
+      e.slain = true; e.kill('slain');
+      FX.smoke(hx, hy, '#1a1028', 10, 22, 18); FX.spark(hx, hy, '#c9b3ff', 10, 6);
+      FX.text(hx, b.y - 34, `${e.name || 'SHIKIGAMI'} DESTROYED`, '#ffd34d', 18, 55);
+    }
+  }
 }
 
 // Lets attacks strike destructible summons (entities with hp and a hurtbox), e.g. Mahoraga.
@@ -1021,16 +1053,15 @@ function resolveClashes() {
 const Domains = {
   start(owner, spec) {
     const cur = World.domain;
-    if (cur && cur.owner !== owner) {
-      // Two domains collide: both shatter.
-      FX.flash('#fff', 1); FX.shake(22);
-      FX.banner('DOMAIN CLASH!', 'Both barriers shatter', '#ffffff', 100);
-      Sound.play('clash');
-      if (cur.onEnd) cur.onEnd(cur, true);
-      World.domain = null;
-      for (const f of World.fighters) if (f.state === 'stun') { f.stun = 1; }
+    if (cur && cur.owner !== owner && cur.owner.team !== owner.team && cur.owner.state !== 'ko') {
+      // Two enemy domains collide: settle it on the clash wheel.
+      Clash.start(cur, owner, spec);
       return null;
     }
+    if (cur && cur.onEnd) cur.onEnd(cur, true);
+    return this.establish(owner, spec);
+  },
+  establish(owner, spec) {
     const d = Object.assign({ owner, age: 0, life: 300 }, spec);
     World.domain = d;
     if (d.onStart) for (const t of World.enemies(owner)) if (t.state !== 'ko') d.onStart(d, t);
@@ -1054,6 +1085,69 @@ const Domains = {
   alpha(d) { return Math.min(1, d.age / 25, (d.life - d.age) / 25); },
 };
 
+/* ---------------------------------------------------------------- Domain clash wheel
+   An arrow sweeps around a wheel. Each caster has their own highlighted zone: press the
+   clash key (Space) while the arrow is inside it to score. Missing locks you out briefly
+   and costs a point. First to 3 (or the leader after 9 seconds) keeps their domain.       */
+
+const TAU = Math.PI * 2;
+const Clash = {
+  start(curDom, owner, spec) {
+    const c = { a: curDom.owner, b: owner, domA: curDom, specB: spec, ang: Math.random() * TAU, spd: 0.065, t: 0, max: 540,
+      score: [0, 0], lock: [0, 0], pop: [0, 0], arcs: [] };
+    c.arcs[0] = this.arc(c.ang + 1.6);
+    c.arcs[1] = this.arc(c.arcs[0].c + Math.PI);
+    World.clash = c;
+    FX.flash('#ffffff', 0.8); FX.shake(16); Sound.play('clash');
+  },
+  arc(center) { return { c: ((center % TAU) + TAU) % TAU, w: 0.75 }; },
+  inArc(ang, arc) { const d = ((ang - arc.c) % TAU + TAU * 1.5) % TAU - Math.PI; return Math.abs(d) < arc.w / 2; },
+  update() {
+    const c = World.clash;
+    c.t++;
+    c.ang = (c.ang + c.spd) % TAU;
+    c.spd = Math.min(0.15, c.spd + 0.00012);
+    [c.a, c.b].forEach((f, i) => {
+      if (c.pop[i] > 0) c.pop[i]--;
+      if (c.lock[i] > 0) { c.lock[i]--; return; }
+      if (!(f.input && f.input.pressed && f.input.pressed.clash)) return;
+      if (this.inArc(c.ang, c.arcs[i])) {
+        c.score[i]++; c.pop[i] = 14;
+        c.arcs[i] = this.arc(c.ang + Math.PI * (0.6 + Math.random() * 0.8));
+        c.arcs[i].w = Math.max(0.42, 0.75 - c.score[i] * 0.1);
+        Sound.play('bf'); FX.shake(8);
+      } else {
+        c.score[i] = Math.max(0, c.score[i] - 1); c.lock[i] = 30;
+        Sound.play('block');
+      }
+    });
+    let win = null;
+    if (c.score[0] >= 3) win = 0;
+    else if (c.score[1] >= 3) win = 1;
+    else if (c.t >= c.max) win = c.score[0] === c.score[1] ? -1 : c.score[0] > c.score[1] ? 0 : 1;
+    if (win !== null) this.resolve(win);
+  },
+  resolve(win) {
+    const c = World.clash;
+    World.clash = null;
+    FX.flash('#ffffff', 1); FX.shake(22); Sound.play('clash');
+    if (win === -1) {
+      if (c.domA.onEnd) c.domA.onEnd(c.domA, true);
+      World.domain = null;
+      FX.banner('DOMAIN CLASH', 'BOTH BARRIERS SHATTER', '#ffffff', 100);
+      return;
+    }
+    const winner = win === 0 ? c.a : c.b, loser = win === 0 ? c.b : c.a;
+    FX.banner('DOMAIN CLASH', `${winner.def.short}'S DOMAIN PREVAILS`, winner.def.color, 110);
+    if (win === 1) {
+      if (c.domA.onEnd) c.domA.onEnd(c.domA, true);
+      World.domain = null;
+      Domains.establish(c.b, c.specB);
+    }
+    loser.applyStun(50, false, true);
+  },
+};
+
 /* ---------------------------------------------------------------- Hit resolution */
 
 const Combat = {
@@ -1062,6 +1156,9 @@ const Combat = {
   hit(att, tgt, h) {
     if (!tgt || tgt.state === 'ko') return 'miss';
     if (tgt.invuln > 0 && !h.sureHit) return 'miss';
+    // counter stances (e.g. Objection!) turn the incoming attack back on the attacker
+    const cm = tgt.move;
+    if (cm && cm.counter && tgt.mf <= cm.counter && !h.unblockable && h.type !== 'domain' && att !== tgt) { cm.onCounter(tgt, att, h); return 'miss'; }
     const dir = h.dir || (tgt.x >= att.x ? 1 : -1);
     const hx = h.x ?? tgt.x - dir * 15, hy = h.y ?? tgt.midY;
     let dmg = typeof h.dmgFn === 'function' ? h.dmgFn(att, tgt) : h.dmg || 0;

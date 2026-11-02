@@ -19,7 +19,7 @@ const KEYSETS = {
 const keyIs = (e, k) => KEYSETS[k].includes(e.code);
 
 const DIFFS = [{ name: 'Easy', v: 0.22 }, { name: 'Normal', v: 0.5 }, { name: 'Hard', v: 0.75 }, { name: 'Cursed', v: 0.95 }];
-const KEY_LABELS = { p1: ['U', 'I', 'O', 'L', 'H', 'G', 'Y', 'T'], p2: ['4', '5', '6', '7', '8', '9', '3', '.'], cpu: ['', '', '', '', '', '', '', ''] };
+const KEY_LABELS = { p1: ['U', 'I', 'O', 'L', 'H', 'G', 'Y', 'T', 'R'], p2: ['4', '5', '6', '7', '8', '9', '3', '.', '+'], cpu: ['', '', '', '', '', '', '', '', ''] };
 
 const Store = {
   get(k, d) { try { const v = localStorage.getItem('jjkcc.' + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
@@ -145,27 +145,62 @@ const UI = {
           <div class="logo-sub"><span>CURSED</span> CLASH</div>
         </div>
         <nav class="menu-list">
-          <button class="nav" data-act="story"><b>Story Mode</b><small>Five chapters against AI curses &amp; sorcerers</small></button>
-          <button class="nav" data-act="versus"><b>Two Player Versus</b><small>Local battle on one keyboard</small></button>
+          <button class="nav" data-act="story"><b>Story Mode</b><small>Eight chapters against AI curses &amp; sorcerers</small></button>
+          <button class="nav" data-act="online"><b>Online Battle</b><small>Fight a friend over the internet with a room code</small></button>
           <button class="nav" data-act="cpu"><b>Versus CPU</b><small>Quick match against the AI</small></button>
           <button class="nav" data-act="gallery"><b>Character Gallery</b><small>Techniques, passives &amp; cursed spirits</small></button>
-          <button class="nav" data-act="controls"><b>Controls</b><small>Key bindings for both players</small></button>
+          <button class="nav" data-act="controls"><b>Controls</b><small>Key bindings &amp; tips</small></button>
           <button class="nav" data-act="settings"><b>Settings</b><small>Audio, effects &amp; round rules</small></button>
         </nav>
-        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back · <span class="build">build 6 · ${ROSTER.length} fighters</span></div>
+        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back · <span class="build">build 7 · ${ROSTER.length} fighters</span></div>
       </div>`;
     s.querySelectorAll('[data-act]').forEach(b => { b.onclick = () => this.menuAct(b.dataset.act); });
   },
   menuAct(a) {
     Sound.init(); Sound.play('confirm');
     if (a === 'story') this.openStory();
-    else if (a === 'versus') Select.open('versus');
+    else if (a === 'online') this.openOnline();
     else if (a === 'cpu') Select.open('cpu');
     else if (a === 'gallery') this.openGallery();
     else if (a === 'controls') this.show('controls', { back: () => this.openMenu(5 - 1) });
     else if (a === 'settings') this.openSettings();
   },
   openMenu(focus = 0) { this.show('menu', { focus }); },
+
+  /* ---------------- online lobby */
+  openOnline() {
+    const s = $('#scr-online');
+    s.innerHTML = `<div class="panel-wrap narrow center"><h2 class="scr-title">ONLINE BATTLE</h2>
+      <p class="online-note">Both players open this game from the same server address. One creates a room, the other joins with its code.</p>
+      <div class="set-list">
+        <button class="nav set-row" data-a="create"><span>Create Room</span><b>Host</b></button>
+        <div class="set-row join-row"><input class="room-in" maxlength="4" placeholder="CODE" autocomplete="off" spellcheck="false"><button class="nav join-btn" data-a="join">Join Room</button></div>
+        <div class="online-status"></div>
+        <button class="nav set-row back" data-a="back"><span>← Back</span></button>
+      </div></div>`;
+    const input = s.querySelector('.room-in');
+    input.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') s.querySelector('[data-a=join]').click(); });
+    input.addEventListener('input', () => { input.value = input.value.toUpperCase().replace(/[^A-Z]/g, ''); });
+    const act = async a => {
+      if (a === 'back') { Sound.play('back'); Net.close(); this.openMenu(1); return; }
+      Sound.play('confirm');
+      try {
+        if (a === 'create') { this.onlineStatus('Creating room…'); await Net.create(); }
+        else {
+          const code = input.value.trim();
+          if (code.length !== 4) { this.onlineStatus('Enter the 4-letter room code first.', true); input.focus(); return; }
+          this.onlineStatus(`Joining ${code}…`); await Net.join(code);
+        }
+      } catch (e) { this.onlineStatus('Could not reach the game server. Start it with <code>python3 serve.py</code>.', true); }
+    };
+    s.querySelectorAll('[data-a]').forEach(b => { b.onclick = () => act(b.dataset.a); });
+    this.show('online', { back: () => { Net.close(); this.openMenu(1); } });
+  },
+  onlineStatus(html, err) {
+    const box = document.querySelector('#scr-online .online-status');
+    if (!box) return;
+    box.innerHTML = html; box.classList.toggle('err', !!err);
+  },
 
   /* ---------------- arena select */
   openArena(onPick, onBack) {
@@ -465,7 +500,8 @@ const UI = {
     const labels = f.keyLabels || KEY_LABELS.cpu;
     const nAb = Math.max(4, f.abilities.length);
     for (let i = 0; i < nAb; i++) {
-      const a = f.abilities[i], size = 42, ix = R ? W - 110 - (nAb - i) * 50 + 8 : 110 + i * 50, iy = 86;
+      const step = nAb > 8 ? 46 : 50, size = nAb > 8 ? 40 : 42;
+      const a = f.abilities[i], ix = R ? W - 110 - (nAb - i) * step + 8 : 110 + i * step, iy = 86;
       ctx.fillStyle = 'rgba(8,8,18,0.85)'; ctx.fillRect(ix, iy, size, size);
       if (!a) { ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.strokeRect(ix + 0.5, iy + 0.5, size - 1, size - 1); continue; }
       const ready = f.cd[i] <= 0 && f.ce >= a.cost;
@@ -512,6 +548,7 @@ const UI = {
 
   drawOverlays(ctx) {
     if (World.cutscene) { this.drawCutscene(ctx, World.cutscene); return; }
+    if (World.clash) { this.drawClash(ctx, World.clash); return; }
     if (this.bf) this.drawBlackFlash(ctx);
     const b = World.banner;
     if (b) {
@@ -601,6 +638,53 @@ const UI = {
     }
     ctx.globalAlpha = a; ctx.font = '900 54px "Noto Sans JP", "Yu Gothic", sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.fillText('領域展開', W / 2, 70);
+    ctx.restore();
+  },
+
+  drawClash(ctx, c) {
+    const cx = W / 2, cy = 380, R = 170;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = 'italic 900 64px Impact, "Arial Black", sans-serif';
+    ctx.lineWidth = 8; ctx.strokeStyle = '#000'; ctx.strokeText('DOMAIN CLASH!', cx, 92);
+    ctx.fillStyle = '#ffffff'; ctx.fillText('DOMAIN CLASH!', cx, 92);
+    ctx.font = '800 18px "Segoe UI", sans-serif'; ctx.fillStyle = '#ffd34d';
+    ctx.fillText('Press SPACE when the arrow is inside YOUR zone · first to 3', cx, 140);
+    // wheel
+    ctx.fillStyle = '#0c0a18'; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 3; ctx.stroke();
+    for (let i = 0; i < 24; i++) {
+      const a = i / 24 * TAU;
+      ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * (R - 12), cy + Math.sin(a) * (R - 12)); ctx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); ctx.stroke();
+    }
+    [c.a, c.b].forEach((f, i) => {
+      const arc = c.arcs[i], col = f.def.color;
+      ctx.globalAlpha = c.lock[i] ? 0.3 : 1;
+      ctx.strokeStyle = col; ctx.lineWidth = 34 + (c.pop[i] ? 8 : 0);
+      ctx.beginPath(); ctx.arc(cx, cy, R - 30, arc.c - arc.w / 2, arc.c + arc.w / 2); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.font = '900 15px Impact, sans-serif'; ctx.fillStyle = '#fff';
+      ctx.fillText(f.def.short, cx + Math.cos(arc.c) * (R + 26), cy + Math.sin(arc.c) * (R + 26));
+      // score side panels
+      const sx = i === 0 ? cx - 380 : cx + 380;
+      drawPortrait(ctx, f.def, sx, cy - 40, 54, i === 0 ? 1 : -1);
+      ctx.font = '900 26px Impact, sans-serif'; ctx.fillStyle = col; ctx.fillText(`${f.def.short}${f.tag !== 'CPU' ? ' · ' + f.tag : ''}`, sx, cy + 40);
+      for (let k = 0; k < 3; k++) {
+        ctx.beginPath(); ctx.arc(sx - 30 + k * 30, cy + 80, 10, 0, TAU);
+        ctx.fillStyle = c.score[i] > k ? col : 'rgba(255,255,255,0.12)'; ctx.fill();
+        ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
+      }
+      if (c.lock[i]) { ctx.font = '800 16px "Segoe UI", sans-serif'; ctx.fillStyle = '#ff6a6a'; ctx.fillText('MISSED!', sx, cy + 115); }
+    });
+    // the arrow
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(c.ang);
+    ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(-18, -9); ctx.lineTo(R - 22, 0); ctx.lineTo(-18, 9); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(cx, cy, 14, 0, TAU); ctx.fillStyle = '#ffd34d'; ctx.fill();
+    const left = Math.ceil((c.max - c.t) / 60);
+    ctx.font = '800 16px "Segoe UI", sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillText(`${left}s`, cx, cy + R + 40);
     ctx.restore();
   },
 
@@ -697,6 +781,12 @@ function drawHandSign(ctx, sign, cx, cy, k, skin) {
       fing(-24, 30, -36, 6, 11);
       ctx.strokeStyle = '#e8e8f0'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(10, -22, 7, 3, 0, 0, 6.283); ctx.stroke();
       break;
+    case 'scales': // both palms turned up like the pans of a balance
+      sleeve(-40, 0.5); sleeve(40, -0.5);
+      palm(-44, 14, 26, 14, 0.15); palm(44, 14, 26, 14, -0.15);
+      for (let i = 0; i < 4; i++) { fing(-60 + i * 8, 6, -66 + i * 9, -6, 8); fing(60 - i * 8, 6, 66 - i * 9, -6, 8); }
+      ctx.strokeStyle = '#c9a23a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-44, 0); ctx.lineTo(0, -60); ctx.lineTo(44, 0); ctx.stroke();
+      break;
     default: // Mahito: palms pressed together
       sleeve(-14, 0.1); sleeve(14, -0.1);
       palm(-12, 10, 15, 42, 0.08); palm(12, 10, 15, 42, -0.08);
@@ -729,6 +819,8 @@ const Select = {
 
   open(mode) {
     this.mode = mode; this.locked = [false, false];
+    this.online = mode === 'online';
+    this.me = this.online && Net.role === 'guest' ? 1 : 0;
     this.diff = Store.get('diff', 1);
     const lob = Store.get('lobby', { allies: 0, foes: 0, ffa: false });
     this.allies = lob.allies; this.foes = lob.foes; this.ffa = lob.ffa;
@@ -736,10 +828,10 @@ const Select = {
     const cpu = mode === 'cpu';
     s.innerHTML = `<div class="sel-wrap">
       <header class="sel-head"><h2 class="scr-title">CHOOSE YOUR SORCERER</h2>
-        <div class="sel-mode">${cpu ? 'VERSUS CPU' : 'TWO PLAYER VERSUS'}</div>
-        <div class="diff">CPU: ${DIFFS.map((d, i) => `<button data-d="${i}">${d.name}</button>`).join('')}<small>Q / E</small></div>
+        <div class="sel-mode">${this.online ? `ONLINE · ROOM ${Net.code || ''}` : cpu ? 'VERSUS CPU' : 'TWO PLAYER VERSUS'}</div>
+        ${this.online ? '' : `<div class="diff">CPU: ${DIFFS.map((d, i) => `<button data-d="${i}">${d.name}</button>`).join('')}<small>Q / E</small></div>`}
       </header>
-      <div class="lobby">
+      <div class="lobby" ${this.online ? 'hidden' : ''}>
         <label class="lob-allies">Friendly CPUs <input type="range" min="0" max="3" step="1" data-k="allies"><b></b></label>
         <label>Unfriendly CPUs <input type="range" min="0" max="5" step="1" data-k="foes"><b></b></label>
         <button class="lob-ffa"></button>
@@ -748,10 +840,10 @@ const Select = {
       </div>
       <div class="sel-grid"></div>
       <div class="sel-panels">
-        <div class="sel-panel p1"><canvas></canvas><div class="sel-info"></div><div class="sel-tag">P1</div></div>
-        <div class="sel-panel p2"><canvas></canvas><div class="sel-info"></div><div class="sel-tag">${cpu ? 'CPU' : 'P2'}</div></div>
+        <div class="sel-panel p1"><canvas></canvas><div class="sel-info"></div><div class="sel-tag">${this.online ? (this.me === 0 ? 'YOU' : 'OPPONENT') : 'P1'}</div></div>
+        <div class="sel-panel p2"><canvas></canvas><div class="sel-info"></div><div class="sel-tag">${this.online ? (this.me === 1 ? 'YOU' : 'OPPONENT') : cpu ? 'CPU' : 'P2'}</div></div>
       </div>
-      <footer class="menu-foot">${cpu
+      <footer class="menu-foot">${this.online ? 'A/D or ←/→ to choose · J or Enter to lock in · K to undo · Esc to leave the room' : cpu
         ? 'A/D or ←/→ to choose · J or Enter to lock (you, then the CPU) · K to undo · Esc for menu'
         : 'P1: A/D + J to lock, K to undo &nbsp;·&nbsp; P2: ←/→ + Num1 (or .) to lock, Num2 (or /) to undo &nbsp;·&nbsp; Esc for menu'}</footer></div>`;
     const grid = s.querySelector('.sel-grid');
@@ -766,7 +858,7 @@ const Select = {
       b.appendChild(el('div', 'sel-name', `<b>${d.short}</b><small>${d.title}</small>`));
       b.appendChild(el('i', 'cur1', 'P1')); b.appendChild(el('i', 'cur2', cpu ? 'CPU' : 'P2'));
       b.onclick = () => this.clickCard(i);
-      b.onmouseenter = () => { const p = this.picker(); if (p >= 0 && this.cur[p] !== i) { this.cur[p] = i; Sound.play('select'); this.refresh(); } };
+      b.onmouseenter = () => { const p = this.picker(); if (p >= 0 && this.cur[p] !== i) { this.cur[p] = i; Sound.play('select'); this.refresh(); this.syncSel(p); } };
       grid.appendChild(b);
       return b;
     });
@@ -781,7 +873,23 @@ const Select = {
     this.refresh();
   },
   addPrev(c, p) { return UI.addPreview(c, CHARS[ROSTER[this.cur[p]]], { scale: 1.75, glow: true, facing: p ? -1 : 1 }); },
-  picker() { return !this.locked[0] ? 0 : !this.locked[1] ? 1 : -1; },
+  picker() {
+    if (this.online) return this.locked[this.me] ? -1 : this.me;
+    return !this.locked[0] ? 0 : !this.locked[1] ? 1 : -1;
+  },
+  // online: the opponent's cursor and lock state arrive over the network
+  syncSel(p) { if (this.online && p === this.me) Net.send({ t: 'sel', cur: this.cur[p], locked: this.locked[p] }); },
+  remoteSel(cur, locked) {
+    if (!this.online || UI.screen !== 'select') return;
+    const p = 1 - this.me;
+    this.cur[p] = U.clamp(cur | 0, 0, ROSTER.length - 1); this.locked[p] = !!locked;
+    this.refresh(); this.checkReady();
+  },
+  checkReady() {
+    if (!(this.locked[0] && this.locked[1])) return;
+    if (this.online) { if (Net.role === 'host') setTimeout(() => { if (UI.screen === 'select' && this.locked[0] && this.locked[1]) Net.hostGo(ROSTER[this.cur[0]], ROSTER[this.cur[1]]); }, 450); return; }
+    setTimeout(() => { if (UI.screen === 'select') this.done(); }, 450);
+  },
 
   refresh() {
     this.cards.forEach((b, i) => {
@@ -794,7 +902,7 @@ const Select = {
       pn.panel.classList.toggle('locked', this.locked[p]);
       pn.panel.style.setProperty('--c', d.color);
       if (pn.shown !== this.cur[p]) {
-        const keys = this.mode === 'cpu' && p === 1 ? null : p === 0 ? KEY_LABELS.p1 : KEY_LABELS.p2;
+        const keys = this.online ? (p === this.me ? KEY_LABELS.p1 : null) : this.mode === 'cpu' && p === 1 ? null : p === 0 ? KEY_LABELS.p1 : KEY_LABELS.p2;
         pn.info.innerHTML = charInfoHTML(d, keys, false); pn.shown = this.cur[p];
       }
     });
@@ -802,20 +910,20 @@ const Select = {
     this.refreshLobby();
   },
 
-  move(p, d) { if (p < 0 || this.locked[p]) return; this.cur[p] = (this.cur[p] + d + ROSTER.length) % ROSTER.length; Sound.play('select'); this.refresh(); },
+  move(p, d) { if (p < 0 || this.locked[p]) return; this.cur[p] = (this.cur[p] + d + ROSTER.length) % ROSTER.length; Sound.play('select'); this.refresh(); this.syncSel(p); },
   confirm(p) {
     if (p < 0 || this.locked[p]) return;
-    this.locked[p] = true; Sound.play('confirm'); this.refresh();
-    if (this.locked[0] && this.locked[1]) setTimeout(() => { if (UI.screen === 'select') this.done(); }, 450);
+    this.locked[p] = true; Sound.play('confirm'); this.refresh(); this.syncSel(p);
+    this.checkReady();
   },
   cancel(p) {
-    if (this.locked[p]) { this.locked[p] = false; Sound.play('back'); this.refresh(); return; }
+    if (this.locked[p]) { this.locked[p] = false; Sound.play('back'); this.refresh(); this.syncSel(p); return; }
     if (this.mode === 'cpu' && p === 1 && this.locked[0]) { this.locked[0] = false; Sound.play('back'); this.refresh(); }
   },
   clickCard(i) {
     const p = this.picker();
     if (p < 0) return;
-    this.cur[p] = i; this.confirm(p);
+    this.cur[p] = i; this.syncSel(p); this.confirm(p);
   },
   // ---- lobby: friendly / unfriendly CPU counts and free-for-all
   setLobby(k, v) {
@@ -873,7 +981,15 @@ const Select = {
 
   key(e) {
     const c = e.code;
-    if (c === 'Escape') { Sound.play('back'); UI.openMenu(this.mode === 'cpu' ? 2 : 1); return; }
+    if (c === 'Escape') { Sound.play('back'); if (this.online) Net.close(); UI.openMenu(this.mode === 'cpu' ? 2 : 1); return; }
+    if (this.online) {
+      const p = this.me;
+      if (keyIs(e, 'left')) this.move(p, -1);
+      else if (keyIs(e, 'right')) this.move(p, 1);
+      else if (keyIs(e, 'ok')) this.confirm(p);
+      else if (c === 'KeyK' || c === 'Backspace' || c === 'Numpad2') this.cancel(p);
+      return;
+    }
     if (this.mode === 'cpu') {
       const p = this.picker();
       if (keyIs(e, 'left')) this.move(p, -1);
