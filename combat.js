@@ -48,7 +48,17 @@ const World = {
     this.domain = null; this.banner = null; this.cutscene = null;
     this.shake = 0; this.flash = 0; this.timeScale = 1; this.slowTimer = 0; this.hitstop = 0;
   },
-  opp(f) { return this.fighters[0] === f ? this.fighters[1] : this.fighters[0]; },
+  // Fighters on different teams are enemies. opp() is the nearest enemy, preferring ones still standing.
+  enemies(f) { return this.fighters.filter(o => o !== f && o.team !== f.team); },
+  opp(f, x = f.x) {
+    let best = null, bd = Infinity;
+    for (const o of this.fighters) {
+      if (o === f || o.team === f.team) continue;
+      const d = Math.abs(o.x - x) + (o.state === 'ko' ? 1e6 : 0);
+      if (d < bd) { bd = d; best = o; }
+    }
+    return best;
+  },
   later(t, fn) { this.timers.push({ t, fn }); },
   spawn(e) { this.entities.push(e); return e; },
   // highest walkable surface at or below y
@@ -73,10 +83,10 @@ const World = {
       const t = this.timers[i];
       if (--t.t <= 0) { this.timers.splice(i, 1); t.fn(); }
     }
-    if (this.fighters.length === 2) separate(this.fighters[0], this.fighters[1]);
-    for (const f of this.fighters) {
-      const o = this.opp(f);
-      if (o && !o.inHitState()) f.combo = 0;
+    const fs = this.fighters;
+    for (let i = 0; i < fs.length; i++) for (let j = i + 1; j < fs.length; j++) separate(fs[i], fs[j]);
+    for (const f of fs) {
+      if (!f.comboTgt || !f.comboTgt.inHitState()) f.combo = 0;
       if (f.comboShowT > 0) f.comboShowT--;
     }
     updateParticles();
@@ -502,6 +512,7 @@ class Fighter {
     this.setDef(def);
     this.wins = 0;
     this.tag = side === 0 ? 'P1' : 'P2';
+    this.team = side;
     this.resetRound();
   }
 
@@ -518,8 +529,8 @@ class Fighter {
   resetRound() {
     if (this.def !== this.baseDef) this.setDef(this.baseDef);
     this.takeoverT = 0; this.usedTakeover = false; this.split = null;
-    this.x = this.side === 0 ? 420 : W - 420; this.y = FLOOR; this.prevY = FLOOR;
-    this.vx = 0; this.vy = 0; this.facing = this.side === 0 ? 1 : -1; this.onGround = true;
+    this.x = this.spawnX ?? (this.side === 0 ? 420 : W - 420); this.y = FLOOR; this.prevY = FLOOR;
+    this.vx = 0; this.vy = 0; this.facing = this.x < W / 2 ? 1 : -1; this.onGround = true;
     this.hp = this.maxHp; this.hpTrail = this.maxHp; this.ce = 50; this.guard = 100;
     this.state = 'idle'; this.stateT = 0; this.move = null; this.mf = 0; this.mvars = {};
     this.hitList = new Set(); this.moveHit = false;
@@ -688,8 +699,7 @@ class Fighter {
     this.startMove(mv);
     this.mvars.abil = i;
     // Yuta's Copy remembers the last technique used against him.
-    const o = World.opp(this);
-    if (o && o.def.copy && !a.ult && !a.copy && !a.noCopy) o.copied = a;
+    if (!a.ult && !a.copy && !a.noCopy) for (const o of World.enemies(this)) if (o.def.copy) o.copied = a;
     return true;
   }
 
@@ -773,14 +783,16 @@ class Fighter {
     const hb = this.attackRect(m.hitbox);
     const spec = m.hitFn ? m.hitFn(this, opp) : m.hit;
     if (hitSummons(this, hb, null, Object.assign({ melee: true }, spec), this.hitList)) this.moveHit = true;
-    if (this.hitList.has(opp)) return;
-    const hu = opp.hurtbox();
-    if (!U.overlap(hb, hu)) return;
-    this.hitList.add(opp);
-    const x = U.clamp(this.x + this.facing * (m.hitbox.x + m.hitbox.w * 0.7) * this.scale, hu.x, hu.x + hu.w);
-    const y = U.clamp(hb.y + hb.h / 2, hu.y + 10, hu.y + hu.h - 10);
-    const res = Combat.hit(this, opp, Object.assign({ melee: true, dir: this.facing, x, y }, spec));
-    if (res !== 'miss') { this.moveHit = true; if (res === 'hit' && m.onHit) m.onHit(this, opp); }
+    for (const t of World.enemies(this)) {
+      if (this.hitList.has(t)) continue;
+      const hu = t.hurtbox();
+      if (!U.overlap(hb, hu)) continue;
+      this.hitList.add(t);
+      const x = U.clamp(this.x + this.facing * (m.hitbox.x + m.hitbox.w * 0.7) * this.scale, hu.x, hu.x + hu.w);
+      const y = U.clamp(hb.y + hb.h / 2, hu.y + 10, hu.y + hu.h - 10);
+      const res = Combat.hit(this, t, Object.assign({ melee: true, dir: this.facing, x, y }, spec));
+      if (res !== 'miss') { this.moveHit = true; if (res === 'hit' && m.onHit) m.onHit(this, t); }
+    }
   }
 
   applyStun(frames, freeze = false, force = false) {
@@ -937,7 +949,7 @@ class Entity {
     this.hitSet = new Set(); this.hitEvery = 0; this.clash = 0; this.wallKill = false; this.slowT = 0;
     Object.assign(this, o);
   }
-  get target() { return World.opp(this.owner); }
+  get target() { return World.opp(this.owner, this.x); }
   update() {
     const g = this.target;
     if (g && g.def.infinityBlock && g.state === 'block' && Math.abs(g.x - this.x) < 260 && ++this.slowT % 3) return;
@@ -952,17 +964,16 @@ class Entity {
     if (this.age >= this.life) this.kill('expire');
   }
   collide() {
-    const t = this.target;
-    if (!t) return;
     if (this.hitEvery && this.age % this.hitEvery === 0) this.hitSet.clear();
     if (hitSummons(this.owner, null, this, Object.assign({ proj: true }, this.hits), this.hitSet) && !this.pierce) { this.kill('hit'); return; }
-    if (this.hitSet.has(t)) return;
-    if (!U.circleRect(this.x, this.y, this.r, t.hurtbox())) return;
-    const res = Combat.hit(this.owner, t, Object.assign({ dir: this.vx ? Math.sign(this.vx) : this.owner.facing, x: this.x, y: this.y, proj: true }, this.hits));
-    if (res === 'miss') return;
-    this.hitSet.add(t);
-    if (this.onHit) this.onHit(this, t, res);
-    if (!this.pierce) this.kill('hit');
+    for (const t of World.enemies(this.owner)) {
+      if (this.hitSet.has(t) || !U.circleRect(this.x, this.y, this.r, t.hurtbox())) continue;
+      const res = Combat.hit(this.owner, t, Object.assign({ dir: this.vx ? Math.sign(this.vx) : this.owner.facing, x: this.x, y: this.y, proj: true }, this.hits));
+      if (res === 'miss') continue;
+      this.hitSet.add(t);
+      if (this.onHit) this.onHit(this, t, res);
+      if (!this.pierce) { this.kill('hit'); return; }
+    }
   }
   kill(why) {
     if (this.dead) return;
@@ -1022,7 +1033,7 @@ const Domains = {
     }
     const d = Object.assign({ owner, age: 0, life: 300 }, spec);
     World.domain = d;
-    if (d.onStart) d.onStart(d, World.opp(owner));
+    if (d.onStart) for (const t of World.enemies(owner)) if (t.state !== 'ko') d.onStart(d, t);
     Sound.play('domain');
     FX.flash('#fff', 0.8);
     return d;
@@ -1032,7 +1043,12 @@ const Domains = {
     if (!d) return;
     d.age++;
     if (d.owner.state === 'ko' && d.age < d.life - 25) d.age = d.life - 25;
-    if (d.tick && d.age < d.life) d.tick(d, World.opp(d.owner));
+    if (d.tick && d.age < d.life) {
+      // a domain's sure-hit effect reaches every enemy inside it
+      const ts = World.enemies(d.owner).filter(t => t.state !== 'ko');
+      if (!ts.length) d.tick(d, null);
+      for (const t of ts) d.tick(d, t);
+    }
     if (d.age >= d.life) { if (d.onEnd) d.onEnd(d, false); if (World.domain === d) World.domain = null; }
   },
   alpha(d) { return Math.min(1, d.age / 25, (d.life - d.age) / 25); },
@@ -1068,8 +1084,8 @@ const Combat = {
       return 'block';
     }
 
-    if (!tgt.inHitState()) att.combo = 0;
-    att.combo++;
+    if (!tgt.inHitState() || att.comboTgt !== tgt) att.combo = 0;
+    att.combo++; att.comboTgt = tgt;
     att.comboShow = att.combo; att.comboShowT = 90;
     if (!h.noScale && att.combo > 2) dmg *= Math.max(0.4, 1 - (att.combo - 2) * 0.07);
     let kbMul = 1;

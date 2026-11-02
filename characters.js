@@ -334,6 +334,27 @@ function drawVolcanoBg(ctx, d, a) {
   ctx.restore();
 }
 
+function drawSwordFieldBg(ctx, d, a) {
+  if (!d.blades) d.blades = Array.from({ length: 90 }, (_, i) => ({ x: (i * 157) % (W + 80) - 40, y: FLOOR - 10 + (i % 7) * 12, tilt: ((i * 37) % 30 - 15) * DEG, h: 50 + (i * 23) % 60 }));
+  ctx.save(); ctx.globalAlpha = a;
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#2a1630'); g.addColorStop(0.6, '#b85a8a'); g.addColorStop(1, '#3a1a30');
+  ctx.fillStyle = g; ctx.fillRect(-30, -30, W + 60, H + 60);
+  // a huge pale ring hanging in the sky
+  ctx.strokeStyle = 'rgba(255,230,245,0.55)'; ctx.lineWidth = 14;
+  ctx.beginPath(); ctx.ellipse(W / 2, 200, 170, 60, 0, 0, 6.283); ctx.stroke();
+  ctx.fillStyle = '#2a1a28'; ctx.fillRect(-30, FLOOR, W + 60, H - FLOOR + 30);
+  // the plain of blades
+  for (const b of d.blades) {
+    ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.tilt);
+    ctx.strokeStyle = '#d8dce6'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -b.h); ctx.stroke();
+    ctx.strokeStyle = '#c9a23a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-6, -b.h + 10); ctx.lineTo(6, -b.h + 10); ctx.stroke();
+    ctx.strokeStyle = '#2a1a3a'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, -b.h + 10); ctx.lineTo(0, -b.h - 4); ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
 function drawHandsBg(ctx, d, a) {
   ctx.save(); ctx.globalAlpha = a;
   const g = ctx.createLinearGradient(0, 0, 0, H);
@@ -1349,6 +1370,30 @@ const YUTA = {
         FX.text(f.x, f.y - 205, `COPY: ${c.name}`, '#e0ccff', 22, 60);
         FX.ring(f.x, f.y - 90, '#ff7ad9', 80, 18, 4); FX.spark(f.x, f.y - 90, '#e0ccff', 14, 6);
         Sound.play('teleport');
+      },
+    },
+    {
+      name: 'Authentic Mutual Love', icon: '愛', color: '#ff9ad5', cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 1280 },
+      desc: 'DOMAIN EXPANSION. A plain of countless blades: inside it, Copy costs no cursed energy and has no cooldown, and swords erupt beneath the opponent again and again.',
+      move: {
+        id: 'mutuallove', kind: 'ult', startup: 60, active: 0, recovery: 0, poses: ['sign', 'sign'],
+        onStart(f) { f.invuln = 70; domainCutscene(f, 'love', 'AUTHENTIC MUTUAL LOVE'); FX.banner('DOMAIN EXPANSION', 'AUTHENTIC MUTUAL LOVE', '#ff9ad5', 130); FX.slow(40, 0.35); Sound.play('charge'); },
+        onFrame(f, fr) {
+          f.invuln = Math.max(f.invuln, 2);
+          if (fr !== 40) return;
+          Domains.start(f, {
+            type: 'love', life: 360, bg: drawSwordFieldBg,
+            tick(d, t) {
+              // Copy is free and instant for the whole domain
+              const ci = f.abilities.findIndex(a => a && a.copy);
+              if (ci >= 0) f.cd[ci] = 0;
+              f.ce = Math.max(f.ce, 30);
+              if (!t || t.state === 'ko' || d.age % 45 !== 20) return;
+              eruption(f, t.x, { y: World.groundAt(t.x, t.y), delay: 22, w: 80, h: 170, kind: 'spike', tele: '#ff9ad5', sfx: 'slash', debris: '#8a8a9a',
+                hits: { dmg: 45, kb: 4, kby: -12, launch: true, fx: 'slash', color: '#ff9ad5', type: 'domain', chip: 0.5 } });
+            },
+          });
+        },
       },
     },
   ],

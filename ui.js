@@ -152,7 +152,7 @@ const UI = {
           <button class="nav" data-act="controls"><b>Controls</b><small>Key bindings for both players</small></button>
           <button class="nav" data-act="settings"><b>Settings</b><small>Audio, effects &amp; round rules</small></button>
         </nav>
-        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back</div>
+        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back · <span class="build">build 6 · ${ROSTER.length} fighters</span></div>
       </div>`;
     s.querySelectorAll('[data-act]').forEach(b => { b.onclick = () => this.menuAct(b.dataset.act); });
   },
@@ -378,7 +378,10 @@ const UI = {
   drawHUD(ctx) {
     const fs = World.fighters;
     if (fs.length < 2 || !Game.match) return;
-    fs.forEach((f, i) => this.drawSide(ctx, f, i));
+    fs.slice(0, 2).forEach((f, i) => this.drawSide(ctx, f, i));
+    // compact panels for every extra fighter along the bottom
+    const extra = fs.slice(2), pw = 150;
+    extra.forEach((f, i) => this.drawMini(ctx, f, W / 2 - extra.length * (pw + 6) / 2 + i * (pw + 6), H - 54, pw));
     const t = Game.timeLeft();
     ctx.save();
     ctx.fillStyle = 'rgba(8,8,18,0.85)'; ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 2;
@@ -398,6 +401,21 @@ const UI = {
     }
     ctx.font = '700 12px "Segoe UI", sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.75)';
     ctx.fillText(`ROUND ${Game.match.round}`, 640, 112);
+    ctx.restore();
+  },
+
+  drawMini(ctx, f, x, y, w) {
+    ctx.save();
+    ctx.globalAlpha = f.state === 'ko' ? 0.45 : 1;
+    ctx.fillStyle = 'rgba(8,8,18,0.85)'; ctx.fillRect(x, y, w, 46);
+    ctx.fillStyle = TEAM_COLORS[f.team % TEAM_COLORS.length]; ctx.fillRect(x, y, 4, 46);
+    drawPortrait(ctx, f.def, x + 24, y + 23, 17, 1);
+    ctx.font = '900 13px Impact, "Arial Black", sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = '#fff';
+    ctx.fillText(`${f.def.short}${f.tag === 'CPU' ? '' : ' · ' + f.tag}`, x + 46, y + 15);
+    const bw = w - 54;
+    ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(x + 46, y + 20, bw, 9); ctx.fillRect(x + 46, y + 33, bw, 5);
+    ctx.fillStyle = f.hp / f.maxHp > 0.3 ? '#ffb43a' : '#ff4d5a'; ctx.fillRect(x + 46, y + 20, bw * f.hp / f.maxHp, 9);
+    ctx.fillStyle = '#7a5bff'; ctx.fillRect(x + 46, y + 33, bw * f.ce / 100, 5);
     ctx.restore();
   },
 
@@ -672,6 +690,13 @@ function drawHandSign(ctx, sign, cx, cy, k, skin) {
       for (let i = 0; i < 3; i++) { fing(-30 + i * 6, 4 - i * 4, -4, -54 + i * 8, 9); fing(30 - i * 6, 4 - i * 4, 4, -54 + i * 8, 9); }
       fing(-24, 40, -2, 22, 11); fing(24, 40, 2, 22, 11);
       break;
+    case 'love': // one hand raised, a ring on its finger
+      sleeve(0, 0);
+      palm(0, 24, 24, 30);
+      for (let i = 0; i < 4; i++) fing(-15 + i * 10, 0, -17 + i * 11, -50 + Math.abs(i - 1.5) * 8, 10);
+      fing(-24, 30, -36, 6, 11);
+      ctx.strokeStyle = '#e8e8f0'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(10, -22, 7, 3, 0, 0, 6.283); ctx.stroke();
+      break;
     default: // Mahito: palms pressed together
       sleeve(-14, 0.1); sleeve(14, -0.1);
       palm(-12, 10, 15, 42, 0.08); palm(12, 10, 15, 42, -0.08);
@@ -705,13 +730,22 @@ const Select = {
   open(mode) {
     this.mode = mode; this.locked = [false, false];
     this.diff = Store.get('diff', 1);
+    const lob = Store.get('lobby', { allies: 0, foes: 0, ffa: false });
+    this.allies = lob.allies; this.foes = lob.foes; this.ffa = lob.ffa;
     const s = $('#scr-select');
     const cpu = mode === 'cpu';
     s.innerHTML = `<div class="sel-wrap">
       <header class="sel-head"><h2 class="scr-title">CHOOSE YOUR SORCERER</h2>
         <div class="sel-mode">${cpu ? 'VERSUS CPU' : 'TWO PLAYER VERSUS'}</div>
-        ${cpu ? `<div class="diff">CPU: ${DIFFS.map((d, i) => `<button data-d="${i}">${d.name}</button>`).join('')}<small>Q / E</small></div>` : ''}
+        <div class="diff">CPU: ${DIFFS.map((d, i) => `<button data-d="${i}">${d.name}</button>`).join('')}<small>Q / E</small></div>
       </header>
+      <div class="lobby">
+        <label class="lob-allies">Friendly CPUs <input type="range" min="0" max="3" step="1" data-k="allies"><b></b></label>
+        <label>Unfriendly CPUs <input type="range" min="0" max="5" step="1" data-k="foes"><b></b></label>
+        <button class="lob-ffa"></button>
+        <span class="lob-sum"></span>
+        <small>Z/X friendly · C/V unfriendly · F free for all</small>
+      </div>
       <div class="sel-grid"></div>
       <div class="sel-panels">
         <div class="sel-panel p1"><canvas></canvas><div class="sel-info"></div><div class="sel-tag">P1</div></div>
@@ -765,6 +799,7 @@ const Select = {
       }
     });
     document.querySelectorAll('#scr-select [data-d]').forEach(b => b.classList.toggle('on', +b.dataset.d === this.diff));
+    this.refreshLobby();
   },
 
   move(p, d) { if (p < 0 || this.locked[p]) return; this.cur[p] = (this.cur[p] + d + ROSTER.length) % ROSTER.length; Sound.play('select'); this.refresh(); },
@@ -782,10 +817,58 @@ const Select = {
     if (p < 0) return;
     this.cur[p] = i; this.confirm(p);
   },
+  // ---- lobby: friendly / unfriendly CPU counts and free-for-all
+  setLobby(k, v) {
+    if (k === 'allies') this.allies = U.clamp(v, 0, 3);
+    if (k === 'foes') this.foes = U.clamp(v, 0, 5);
+    if (k === 'ffa') this.ffa = v;
+    Store.set('lobby', { allies: this.allies, foes: this.foes, ffa: this.ffa });
+    Sound.play('select'); this.refreshLobby();
+  },
+  refreshLobby() {
+    const s = $('#scr-select');
+    if (!s.querySelector('.lobby')) return;
+    s.querySelectorAll('.lobby input').forEach(inp => {
+      inp.value = this[inp.dataset.k];
+      inp.nextElementSibling.textContent = this[inp.dataset.k];
+      inp.oninput = () => this.setLobby(inp.dataset.k, +inp.value);
+    });
+    const ffaBtn = s.querySelector('.lob-ffa');
+    ffaBtn.textContent = `Free for all: ${this.ffa ? 'ON' : 'OFF'}`;
+    ffaBtn.classList.toggle('on', this.ffa);
+    ffaBtn.onclick = () => this.setLobby('ffa', !this.ffa);
+    s.querySelector('.lob-allies').classList.toggle('off', this.ffa);
+    const n = this.buildRoster().length;
+    s.querySelector('.lob-sum').textContent = this.ffa ? `${n} fighters, every one for themselves`
+      : this.mode === 'cpu' ? `You + ${this.allies} ${this.allies === 1 ? 'ally' : 'allies'} vs ${1 + this.foes} ${this.foes ? 'enemies' : 'enemy'}`
+      : `P1 & P2 each get ${this.allies} ${this.allies === 1 ? 'ally' : 'allies'}${this.foes ? ` · ${this.foes} hostile CPU${this.foes > 1 ? 's' : ''} fight both teams` : ''}`;
+  },
+  buildRoster() {
+    const cpu = this.mode === 'cpu', lvl = DIFFS[this.diff].v, rnd = () => U.pick(ROSTER);
+    const roster = [
+      { id: ROSTER[this.cur[0]], team: 0, ai: null, keys: cpu ? 'solo' : 'p1', tag: 'P1' },
+      { id: ROSTER[this.cur[1]], team: 1, ai: cpu ? lvl : null, keys: 'p2', tag: cpu ? 'CPU' : 'P2' },
+    ];
+    if (this.ffa) {
+      for (let i = 0; i < this.foes; i++) roster.push({ id: rnd(), team: roster.length, ai: lvl, tag: 'CPU' });
+    } else {
+      for (let i = 0; i < this.allies; i++) roster.push({ id: rnd(), team: 0, ai: lvl, tag: 'CPU' });
+      if (!cpu) for (let i = 0; i < this.allies; i++) roster.push({ id: rnd(), team: 1, ai: lvl, tag: 'CPU' });
+      for (let i = 0; i < this.foes; i++) roster.push({ id: rnd(), team: cpu ? 1 : 2, ai: lvl, tag: 'CPU' });
+    }
+    return roster.slice(0, 8);
+  },
   done() {
-    const p1 = ROSTER[this.cur[0]], p2 = ROSTER[this.cur[1]], cpu = this.mode === 'cpu';
-    UI.openArena(arena => Game.startMatch({ mode: this.mode, p1, p2, arena, p2ai: cpu ? DIFFS[this.diff].v : null, solo: cpu, wins: 2 }),
+    const roster = this.buildRoster();
+    UI.openArena(arena => Game.startMatch({ mode: this.mode, roster, arena, ffa: this.ffa, wins: 2 }),
       () => this.open(this.mode));
+  },
+
+  lobbyKey(c) {
+    if (c === 'KeyZ' || c === 'KeyX') { this.setLobby('allies', this.allies + (c === 'KeyX' ? 1 : -1)); return true; }
+    if (c === 'KeyC' || c === 'KeyV') { this.setLobby('foes', this.foes + (c === 'KeyV' ? 1 : -1)); return true; }
+    if (c === 'KeyF') { this.setLobby('ffa', !this.ffa); return true; }
+    return false;
   },
 
   key(e) {
@@ -797,9 +880,12 @@ const Select = {
       else if (keyIs(e, 'right')) this.move(p, 1);
       else if (keyIs(e, 'ok')) this.confirm(p);
       else if (c === 'KeyK' || c === 'Backspace' || c === 'Numpad2') this.cancel(p < 0 ? 1 : p);
+      else if (this.lobbyKey(c)) { /* handled */ }
       else if (c === 'KeyQ' || c === 'KeyE') { this.diff = (this.diff + (c === 'KeyE' ? 1 : DIFFS.length - 1)) % DIFFS.length; Store.set('diff', this.diff); Sound.play('select'); this.refresh(); }
       return;
     }
+    if (this.lobbyKey(c)) return;
+    if (c === 'KeyQ' || c === 'KeyE') { this.diff = (this.diff + (c === 'KeyE' ? 1 : DIFFS.length - 1)) % DIFFS.length; Store.set('diff', this.diff); Sound.play('select'); this.refresh(); return; }
     if (c === 'KeyA') this.move(0, -1);
     else if (c === 'KeyD') this.move(0, 1);
     else if (c === 'KeyJ') this.confirm(0);

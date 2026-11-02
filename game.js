@@ -254,27 +254,51 @@ function arenaBackground(a) {
 
 /* ---------------------------------------------------------------- game flow */
 
+const TEAM_COLORS = ['#4da3ff', '#ff4d5a', '#ffd34d', '#7fd04a', '#c070ff', '#ff9a2a', '#5fe0e0', '#ff7ad9'];
+
 const Game = {
   running: false, paused: false, mode: null, match: null,
   phase: 'none', phaseT: 0, timer: 0,
 
+  // cfg.roster: [{ id, team, ai (level or null), keys: 'p1'|'p2'|'solo', tag }].
+  // Older configs (p1/p2/p1ai/p2ai) are converted into a two-fighter roster.
   startMatch(cfg) {
     const arena = ARENAS.find(a => a.id === cfg.arena) || U.pick(ARENAS);
     World.arena = arena; World.platforms = arena.platforms;
-    const mk = (ai, map) => (ai != null ? new AIController(ai) : new KeyController(map));
-    const a = new Fighter(CHARS[cfg.p1], 0, mk(cfg.p1ai, cfg.solo ? BINDS.solo : BINDS.p1));
-    const b = new Fighter(CHARS[cfg.p2], 1, mk(cfg.p2ai, BINDS.p2));
-    a.tag = cfg.p1ai != null ? 'CPU' : 'P1';
-    b.tag = cfg.p2ai != null ? 'CPU' : 'P2';
-    a.keyLabels = cfg.p1ai != null ? KEY_LABELS.cpu : KEY_LABELS.p1;
-    b.keyLabels = cfg.p2ai != null ? KEY_LABELS.cpu : KEY_LABELS.p2;
-    if (cfg.boss) { b.maxHp = Math.round(b.maxHp * 1.1); }
-    World.fighters = [a, b];
+    const roster = cfg.roster || [
+      { id: cfg.p1, team: 0, ai: cfg.p1ai ?? null, keys: cfg.solo ? 'solo' : 'p1', tag: cfg.p1ai != null ? 'CPU' : 'P1' },
+      { id: cfg.p2, team: 1, ai: cfg.p2ai ?? null, keys: 'p2', tag: cfg.p2ai != null ? 'CPU' : 'P2', boss: cfg.boss },
+    ];
+    World.fighters = roster.map((r, i) => {
+      const input = r.ai != null ? new AIController(r.ai) : new KeyController(BINDS[r.keys || 'p1']);
+      const f = new Fighter(CHARS[r.id], i === 0 ? 0 : 1, input);
+      f.team = r.team; f.tag = r.tag || (r.ai != null ? 'CPU' : 'P' + (i + 1));
+      f.keyLabels = r.ai != null ? KEY_LABELS.cpu : r.keys === 'p2' ? KEY_LABELS.p2 : KEY_LABELS.p1;
+      if (r.boss) f.maxHp = Math.round(f.maxHp * 1.1);
+      return f;
+    });
+    this.placeFighters();
     this.match = { cfg, winsNeeded: cfg.wins || 2, round: 0 };
     this.mode = cfg.mode; this.running = true; this.paused = false;
     Sound.muted = cfg.mode === 'demo';
     if (cfg.mode !== 'demo') UI.show(null);
     this.startRound();
+  },
+
+  // Spread fighters across the arena, grouped by team.
+  placeFighters() {
+    const fs = World.fighters;
+    if (fs.length === 2) { fs[0].spawnX = 420; fs[1].spawnX = W - 420; return; }
+    const order = fs.slice().sort((a, b) => a.team - b.team);
+    order.forEach((f, i) => { f.spawnX = Math.round(U.lerp(170, W - 170, order.length > 1 ? i / (order.length - 1) : 0.5)); });
+  },
+
+  teamsAlive() { return new Set(World.fighters.filter(f => f.hp > 0).map(f => f.team)); },
+  teamName(team) {
+    const fs = World.fighters.filter(f => f.team === team), lead = fs[0];
+    if (fs.length === 1) return lead.tag === 'CPU' ? `${lead.def.short} (CPU)` : lead.tag === 'P1' ? 'PLAYER 1' : lead.tag === 'P2' ? 'PLAYER 2' : lead.def.short;
+    const human = fs.find(f => f.tag === 'P1' || f.tag === 'P2');
+    return human ? `${human.tag === 'P1' ? 'PLAYER 1' : 'PLAYER 2'}'S TEAM` : 'CPU TEAM';
   },
 
   startRound() {
@@ -290,11 +314,12 @@ const Game = {
   update() {
     UI.tick();
     this.phaseT++;
-    const [a, b] = World.fighters, m = this.match;
+    const fs = World.fighters, m = this.match;
     if (this.phase === 'intro') {
       if (this.phaseT === 1) {
-        const final = m.winsNeeded > 1 && a.wins === m.winsNeeded - 1 && b.wins === m.winsNeeded - 1;
-        UI.announce(final ? 'FINAL ROUND' : `ROUND ${m.round}`, '#ffffff', 65, `${a.def.name}  vs  ${b.def.name}`);
+        const final = m.winsNeeded > 1 && new Set(fs.map(f => f.team)).size === 2 && fs.every(f => f.wins === m.winsNeeded - 1);
+        const sub = fs.length === 2 ? `${fs[0].def.name}  vs  ${fs[1].def.name}` : `${fs.length} fighters · ${m.cfg.ffa ? 'FREE FOR ALL' : 'TEAM BATTLE'}`;
+        UI.announce(final ? 'FINAL ROUND' : `ROUND ${m.round}`, '#ffffff', 65, sub);
         Sound.play('round');
       }
       if (this.phaseT === 75) { UI.announce('FIGHT!', '#ffd34d', 45); Sound.play('fight'); World.active = true; this.phase = 'fight'; this.phaseT = 0; }
@@ -310,9 +335,10 @@ const Game = {
     }
   },
 
+  // A round only ends once a single team (or nobody) is left standing.
   onKO() {
     if (this.phase !== 'fight') return;
-    this.endFight('ko');
+    if (this.teamsAlive().size <= 1) this.endFight('ko');
   },
 
   endFight(why) {
@@ -323,34 +349,44 @@ const Game = {
   },
 
   endRound() {
-    const [a, b] = World.fighters, m = this.match;
-    let w = null;
-    if (a.hp > 0 && b.hp <= 0) w = a;
-    else if (b.hp > 0 && a.hp <= 0) w = b;
-    else if (a.hp / a.maxHp !== b.hp / b.maxHp) w = a.hp / a.maxHp > b.hp / b.maxHp ? a : b;
-    if (!w && m.round >= 5) w = a;
-    if (w) w.wins++;
-    else UI.announce('DRAW', '#ffffff', 70);
-    if (w && w.wins >= m.winsNeeded) {
-      this.phase = 'over'; this.phaseT = 0; this.winner = w;
-      if (w.state !== 'ko') { w.victory = true; w.interruptMove(); w.state = 'idle'; }
-      const label = this.mode === 'story' ? (w === a ? 'VICTORY' : 'DEFEAT') : `${w.def.short} WINS`;
-      UI.announce(label, w === a || this.mode !== 'story' ? '#ffd34d' : '#ff3355', 130);
+    const fs = World.fighters, m = this.match;
+    let team = null;
+    const alive = this.teamsAlive();
+    if (alive.size === 1) team = [...alive][0];
+    else {
+      // time out: the team with the most remaining health (as a share of its total) wins
+      const score = {};
+      for (const f of fs) if (alive.has(f.team)) score[f.team] = (score[f.team] || 0) + f.hp / f.maxHp / fs.filter(o => o.team === f.team).length;
+      const ranked = Object.entries(score).sort((a, b) => b[1] - a[1]);
+      if (ranked.length && (ranked.length === 1 || ranked[0][1] !== ranked[1][1])) team = +ranked[0][0];
+      if (team === null && m.round >= 5) team = fs[0].team;
+    }
+    if (team !== null) for (const f of fs) if (f.team === team) f.wins++;
+    if (team === null) UI.announce('DRAW', '#ffffff', 70);
+    const lead = team !== null && fs.find(f => f.team === team);
+    if (lead && lead.wins >= m.winsNeeded) {
+      this.phase = 'over'; this.phaseT = 0; this.winner = lead; this.winTeam = team;
+      for (const f of fs) if (f.team === team && f.state !== 'ko') { f.victory = true; f.interruptMove(); f.state = 'idle'; }
+      const p1Won = team === fs[0].team;
+      const label = this.mode === 'story' ? (p1Won ? 'VICTORY' : 'DEFEAT') : fs.length === 2 ? `${lead.def.short} WINS` : `${this.teamName(team)} WINS`;
+      UI.announce(label, p1Won || this.mode !== 'story' ? '#ffd34d' : '#ff3355', 130);
       Sound.play('confirm');
     } else this.startRound();
   },
 
   finishMatch() {
-    const w = this.winner, [a, b] = World.fighters, cfg = this.match.cfg;
+    const w = this.winner, fs = World.fighters, cfg = this.match.cfg;
     if (this.mode === 'demo') { this.startDemo(); return; }
-    if (this.mode === 'story') { Story.onResult(w === a); return; }
-    const who = w === a ? (a.tag === 'CPU' ? 'CPU' : 'PLAYER 1') : (b.tag === 'CPU' ? 'CPU' : 'PLAYER 2');
+    if (this.mode === 'story') { Story.onResult(this.winTeam === fs[0].team); return; }
+    const teams = [...new Set(fs.map(f => f.team))];
+    const stats = fs.length === 2
+      ? `${fs[0].def.short} ${fs[0].wins} &nbsp;–&nbsp; ${fs[1].wins} ${fs[1].def.short}`
+      : teams.map(t => `${this.teamName(t)} ${fs.find(f => f.team === t).wins}`).join(' &nbsp;·&nbsp; ');
     UI.showResult({
-      title: `${who} WINS`, sub: `${w.def.name} — ${w.def.title}`, color: w.def.color,
-      stats: `${a.def.short} ${a.wins} &nbsp;–&nbsp; ${b.wins} ${b.def.short}`,
+      title: `${this.teamName(this.winTeam)} WINS`, sub: `${w.def.name} — ${w.def.title}`, color: w.def.color, stats,
       buttons: [
         { label: 'Rematch', fn: () => this.startMatch(cfg) },
-        { label: 'Character Select', fn: () => { this.startDemo(); Select.open(cfg.mode); } },
+        { label: 'Character Select', fn: () => { this.startDemo(); Select.open(cfg.mode === 'story' ? 'versus' : cfg.mode); } },
         { label: 'Main Menu', fn: () => this.toMenu() },
       ],
     });
@@ -420,7 +456,7 @@ function drawTags(c) {
   for (const f of World.fighters) {
     if (f.state === 'ko') continue;
     const h = headPos(f), y = h.y - 40 * f.scale;
-    const col = f.tag === 'CPU' ? '#9aa0b0' : f.side === 0 ? '#4da3ff' : '#ff4d5a';
+    const col = TEAM_COLORS[f.team % TEAM_COLORS.length];
     c.fillStyle = col;
     c.beginPath(); c.moveTo(h.x - 7, y - 8); c.lineTo(h.x + 7, y - 8); c.lineTo(h.x, y); c.closePath(); c.fill();
     c.font = '800 11px "Segoe UI", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'alphabetic';

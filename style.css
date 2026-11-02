@@ -144,7 +144,18 @@ kbd { display: inline-block; min-width: 1.8em; padding: 0.1em 0.4em; border: 1px
 .diff { margin-left: auto; display: flex; align-items: center; gap: 0.35em; font-size: 0.9em; color: var(--muted); }
 .diff button { padding: 0.35em 0.9em; border: 1px solid var(--line); border-radius: 0.3em; background: var(--panel); color: var(--text); }
 .diff button.on { background: #ff3355; border-color: #ff3355; color: #000; font-weight: 800; }
-.sel-grid { display: flex; justify-content: center; gap: 0.8em; margin: 0.9em 0; }
+.lobby { display: flex; align-items: center; gap: 1.2em; margin-top: 0.6em; padding: 0.5em 1em; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 0.4em; font-size: 0.9em; }
+.lobby label { display: flex; align-items: center; gap: 0.5em; }
+.lobby label.off { opacity: 0.35; pointer-events: none; }
+.lobby input[type=range] { width: 8em; accent-color: #8f6bff; }
+.lobby b { color: var(--gold); min-width: 1em; }
+.lob-ffa { padding: 0.35em 0.9em; border: 1px solid var(--line); border-radius: 0.3em; background: rgba(255, 255, 255, 0.05); }
+.lob-ffa.on { background: #ff3355; border-color: #ff3355; color: #000; font-weight: 800; }
+.lob-sum { color: #cfd4f0; }
+.lobby small { margin-left: auto; color: var(--muted); }
+.sel-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.8em; margin: 0.9em 0; }
+.build { color: var(--gold); }
 .sel-card { --c: #fff; position: relative; width: 9em; background: var(--panel); border: 2px solid var(--line); border-radius: 0.4em; padding: 0.5em 0.4em 0.6em; }
 .sel-card canvas { width: 6.5em; aspect-ratio: 1; display: block; margin: 0 auto; }
 .sel-name b { display: block; font-family: Impact, sans-serif; font-weight: 400; font-size: 1.15em; letter-spacing: 0.05em; color: var(--c); }
