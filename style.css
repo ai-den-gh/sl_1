@@ -156,7 +156,7 @@ kbd { display: inline-block; min-width: 1.8em; padding: 0.1em 0.4em; border: 1px
 .lobby small { margin-left: auto; color: var(--muted); }
 .sel-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.8em; margin: 0.9em 0; }
 .build { color: var(--gold); }
-.sel-card { --c: #fff; position: relative; width: 8em; background: var(--panel); border: 2px solid var(--line); border-radius: 0.4em; padding: 0.5em 0.4em 0.6em; }
+.sel-card { --c: #fff; position: relative; width: 7.6em; background: var(--panel); border: 2px solid var(--line); border-radius: 0.4em; padding: 0.5em 0.4em 0.6em; }
 .sel-card canvas { width: 6.5em; aspect-ratio: 1; display: block; margin: 0 auto; }
 .sel-name b { display: block; font-family: Impact, sans-serif; font-weight: 400; font-size: 1.15em; letter-spacing: 0.05em; color: var(--c); }
 .sel-name small { color: var(--muted); font-size: 0.72em; }

@@ -173,8 +173,8 @@ function eruption(f, x, o) {
         ctx.quadraticCurveTo(e.x + e.w * 0.3, e.y - h * 0.6, e.x + e.w / 2, e.y); ctx.fill();
         if (Math.random() < 0.6) FX.glow(e.x + U.rand(-20, 20), e.y - U.rand(0, h), '#ff7a2a', 14, 14, 0, -2);
       } else {
-        const fill = e.kind === 'root' ? '#6b4a2b' : e.kind === 'shadow' ? '#0c0a14' : '#9aa5b0';
-        const edge = e.kind === 'root' ? '#2a1a0c' : e.kind === 'shadow' ? '#9b6bff' : '#3a4048';
+        const fill = e.kind === 'root' ? '#6b4a2b' : e.kind === 'shadow' ? '#0c0a14' : e.kind === 'bamboo' ? '#6fae4a' : '#9aa5b0';
+        const edge = e.kind === 'root' ? '#2a1a0c' : e.kind === 'shadow' ? '#9b6bff' : e.kind === 'bamboo' ? '#2a4a1a' : '#3a4048';
         ctx.fillStyle = fill; ctx.strokeStyle = edge; ctx.lineWidth = 2.5;
         for (let i = -2; i <= 2; i++) {
           const sx = e.x + i * e.w * 0.18, sh = h * (1 - Math.abs(i) * 0.22);
@@ -2596,10 +2596,151 @@ const AYANE = {
   ],
 };
 
+/* ---------------------------------------------------------------- BAO (original) */
+
+function drawBambooBg(ctx, d, a) {
+  ctx.save(); ctx.globalAlpha = a;
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#0e2a14'); g.addColorStop(0.7, '#2f6a2a'); g.addColorStop(1, '#14301a');
+  ctx.fillStyle = g; ctx.fillRect(-30, -30, W + 60, H + 60);
+  // endless rows of bamboo stalks
+  for (let layer = 0; layer < 2; layer++) {
+    for (let i = 0; i < 26; i++) {
+      const x = (i * 53 + layer * 27) % (W + 40) - 20, w = layer ? 14 : 9, sway = Math.sin(d.age * 0.02 + i) * 4;
+      ctx.fillStyle = layer ? '#4f8f3a' : '#3a6a2c';
+      ctx.fillRect(x + sway, 0, w, FLOOR);
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      for (let y = 40 + (i * 17) % 60; y < FLOOR; y += 90) ctx.fillRect(x + sway, y, w, 3);
+    }
+  }
+  ctx.fillStyle = '#1e3a18'; ctx.fillRect(-30, FLOOR, W + 60, H - FLOOR + 30);
+  ctx.restore();
+}
+
+const BAO = {
+  id: 'bao', name: 'Bao', short: 'BAO', title: 'The Bamboo Monk', kanji: '包', color: '#7fc46a',
+  style: 'A heavy, patient brawler: long-reach staff work, rolling tackles and bamboo that bursts from the ground.',
+  bio: 'A giant panda raised in a mountain monastery, where the monks taught him to channel cursed energy through a bamboo staff. Calm until provoked — then very, very heavy.',
+  passive: { name: 'Thick Fur', desc: 'Bao takes 15% less damage from melee attacks and gets knocked back half as far. He is a little slower on his feet.' },
+  hp: 1150, speed: 0.95, scale: 1.12, shoulderW: 16, hipW: 12,
+  melee: { weapon: 'sword', weaponName: 'Bamboo Staff', reach: 32, power: 1.1 },
+  look: { skin: '#16161a', top: '#16161a', pants: '#16161a', accent: '#7fc46a', shoe: '#16161a' },
+  aiStyle: { pref: 115 },
+  onIncoming(f, dmg, h) { return { dmg: h.melee ? dmg * 0.85 : dmg, kb: 0.5 }; },
+  drawTorso(g) {
+    const { ctx, sk, col, OL } = g;
+    // white belly and chest, red monk's scarf at the neck
+    ctx.fillStyle = col('#f2f0ea'); ctx.strokeStyle = OL; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(sk.neck[0] * 0.45, sk.neck[1] * 0.45, 12, 20, sk.td[0] * 0.3, 0, 6.283); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = col('#c4122f'); ctx.lineWidth = 6;
+    lineTo2(ctx, [sk.sh[0] - 10, sk.sh[1] + 2], [sk.sh[0] + 10, sk.sh[1] + 2]);
+    lineTo2(ctx, [sk.sh[0] - 8, sk.sh[1] + 2], [sk.sh[0] - 14, sk.sh[1] + 18]);
+  },
+  drawHead(g) {
+    const { ctx, sk, col, OL, o } = g, [hx, hy] = sk.head;
+    ctx.fillStyle = col('#16161a'); ctx.strokeStyle = OL; ctx.lineWidth = 2;
+    for (const ex of [-9, 9]) { ctx.beginPath(); ctx.arc(hx + ex, hy - 14, 7, 0, 6.283); ctx.fill(); ctx.stroke(); }
+    headCircle(g, hx, hy, 17, '#f2f0ea');
+    if (o.white || o.tint) return;
+    ctx.fillStyle = '#16161a';
+    ctx.beginPath(); ctx.ellipse(hx + 5, hy - 1, 4.5, 6, -0.4, 0, 6.283); ctx.ellipse(hx + 13, hy - 1, 3.5, 5.5, 0.4, 0, 6.283); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(hx + 6, hy - 2, 1.4, 0, 6.283); ctx.arc(hx + 13, hy - 2, 1.2, 0, 6.283); ctx.fill();
+    ctx.fillStyle = '#16161a'; ctx.beginPath(); ctx.ellipse(hx + 15, hy + 6, 3, 2, 0, 0, 6.283); ctx.fill();
+  },
+  drawWeapon(g) {
+    const { ctx, sk, col, OL } = g, e = sk.aF[1], h = sk.aF[2];
+    let dx = h[0] - e[0], dy = h[1] - e[1];
+    const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
+    const a = [h[0] - dx * 40, h[1] - dy * 40], b = [h[0] + dx * 70, h[1] + dy * 70];
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = OL; ctx.lineWidth = 8; lineTo2(ctx, a, b);
+    ctx.strokeStyle = col('#8fbf5a'); ctx.lineWidth = 5; lineTo2(ctx, a, b);
+    ctx.strokeStyle = col('#4a6a2a'); ctx.lineWidth = 6;
+    for (const k of [-25, 15, 50]) { const p = [h[0] + dx * k, h[1] + dy * k]; lineTo2(ctx, [p[0] - dy * 3, p[1] + dx * 3], [p[0] + dy * 3, p[1] - dx * 3]); }
+  },
+  abilities: [
+    {
+      name: 'Staff Whirl', icon: '旋', color: '#8fbf5a', cost: 15, cd: 150, ai: { min: 0, max: 150 },
+      desc: 'Spins the bamboo staff in a wide circle, battering anyone on either side of him.',
+      move: {
+        id: 'whirl', kind: 'special', startup: 6, active: 20, recovery: 14, hitEvery: 5, sfx: 'whoosh', snapPose: true,
+        hitbox: { x: -100, y: -140, w: 200, h: 110 }, hit: { dmg: 14, kb: 4, stun: 14, noScale: true, color: '#8fbf5a', hitstop: 1 },
+        getPose(f, fr) { const p = poseCopy(fr < 6 ? POSES.slashW : POSES.slash2); if (fr >= 6 && fr < 26) p.aF[0] = 40 + ((fr - 6) * 40) % 360; return p; },
+        onFrame(f, fr) { if (fr >= 6 && fr < 26 && fr % 5 === 0) FX.arc(f, { color: '#cde88a', r: 100, a0: -170, a1: 170 }); },
+      },
+    },
+    {
+      name: 'Rolling Tumble', icon: '転', color: '#f2f0ea', cost: 15, cd: 170, ai: { min: 80, max: 340 },
+      desc: 'Curls into a ball and rolls straight through the opponent, launching them. Hard to stop once he gets going.',
+      move: {
+        id: 'roll', kind: 'special', startup: 6, active: 18, recovery: 12, keepVel: true, snapPose: true, sfx: 'dash',
+        hitbox: { x: -20, y: -90, w: 80, h: 90 }, hit: { dmg: 62, kb: 11, kby: -11, launch: true, hitstop: 8, shake: 7, sfx: 'heavy' },
+        getPose(f, fr) { const p = poseCopy(POSES.jump); p.rot = fr >= 6 && fr < 24 ? (fr - 6) * 40 * -1 : 0; return p; },
+        onFrame(f, fr) {
+          if (fr >= 6 && fr < 24) { f.vx = f.facing * 15; if (fr % 2 === 0) FX.dust(f.x, f.y, 2); }
+          if (fr === 24) f.vx *= 0.2;
+        },
+      },
+    },
+    {
+      name: 'Bamboo Grove', icon: '竹', color: '#6fae4a', cost: 25, cd: 260, ai: { min: 120, max: 800 },
+      desc: 'Stamps the ground: three bursts of sharpened bamboo erupt in a line toward the opponent.',
+      move: {
+        id: 'grove', kind: 'special', startup: 14, active: 1, recovery: 18, poses: ['heavyW', 'block'],
+        onFrame(f, fr, t) {
+          if (fr !== 14) return;
+          FX.shake(6); FX.dust(f.x, f.y, 10);
+          const dir = t ? (t.x >= f.x ? 1 : -1) : f.facing;
+          for (let i = 0; i < 3; i++) {
+            eruption(f, f.x + dir * (120 + i * 110), { delay: 10 + i * 8, w: 70, h: 150 + i * 15, kind: 'bamboo', tele: '#8fbf5a', sfx: 'heavy', debris: '#4a6a2a',
+              hits: { dmg: 45, kb: 4, kby: -12, launch: true, fx: 'wood', color: '#8fbf5a' } });
+          }
+        },
+      },
+    },
+    {
+      name: 'Snack Break', icon: '食', color: '#cde88a', cost: 30, cd: 720, ground: true, ai: { min: 300, max: 1280, when: f => f.hp < f.maxHp * 0.55 },
+      desc: 'Sits down and munches a stalk of bamboo, regaining up to 160 health. Getting hit interrupts the snack.',
+      move: {
+        id: 'snack', kind: 'special', startup: 60, active: 0, recovery: 8, poses: ['sign', 'idle'],
+        getPose: (f, fr) => { const p = poseCopy(POSES.sign); p.lF = [70, -110]; p.lB = [60, -100]; return fr < 60 ? p : POSES.idle; },
+        onStart(f) { FX.text(f.x, f.y - 180, 'munch munch', '#cde88a', 18, 50); Sound.play('heal'); },
+        onFrame(f, fr) {
+          if (fr >= 60) return;
+          f.hp = Math.min(f.maxHp, f.hp + 160 / 60);
+          if (fr % 8 === 0) FX.debris(f.x + f.facing * 14, f.y - 90, '#8fbf5a', 2, 3);
+          if (fr === 59) FX.text(f.x, f.y - 175, '+160', '#9be05a', 24, 45);
+        },
+      },
+    },
+    {
+      name: 'Endless Bamboo Grove', icon: '森', color: '#7fc46a', cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 1280 },
+      desc: 'DOMAIN EXPANSION. A boundless bamboo forest: the opponent is slowed in the thicket, bamboo spears erupt under them again and again, and Bao slowly heals.',
+      move: {
+        id: 'bamboodomain', kind: 'ult', startup: 60, active: 0, recovery: 0, poses: ['sign', 'sign'],
+        onStart(f) { f.invuln = 70; domainCutscene(f, 'hands', 'ENDLESS BAMBOO GROVE'); FX.banner('DOMAIN EXPANSION', 'ENDLESS BAMBOO GROVE', '#7fc46a', 130); FX.slow(40, 0.35); Sound.play('charge'); },
+        onFrame(f, fr) {
+          f.invuln = Math.max(f.invuln, 2);
+          if (fr !== 40) return;
+          Domains.start(f, {
+            type: 'bamboo', life: 360, slowOpp: true, bg: drawBambooBg,
+            tick(d, t) {
+              if (f.state !== 'ko') f.hp = Math.min(f.maxHp, f.hp + 0.15);
+              if (!t || t.state === 'ko' || d.age % 40 !== 15) return;
+              eruption(f, t.x, { y: World.groundAt(t.x, t.y), delay: 20, w: 80, h: 180, kind: 'bamboo', tele: '#8fbf5a', sfx: 'heavy', debris: '#4a6a2a',
+                hits: { dmg: 40, kb: 4, kby: -13, launch: true, fx: 'wood', type: 'domain', chip: 0.5 } });
+            },
+          });
+        },
+      },
+    },
+  ],
+};
+
 /* ---------------------------------------------------------------- roster */
 
-const CHARS = { gojo: GOJO, sukuna: SUKUNA, yuji: YUJI, yuta: YUTA, megumi: MEGUMI, g4: CURSE_G4, g3: CURSE_G3, finger: FINGER_BEARER, hanami: HANAMI, jogo: JOGO, mahito: MAHITO, choso: CHOSO, jin: JIN, ayane: AYANE };
-const ROSTER = ['yuji', 'gojo', 'sukuna', 'yuta', 'megumi', 'mahito', 'jogo', 'choso', 'jin', 'ayane'];
+const CHARS = { gojo: GOJO, sukuna: SUKUNA, yuji: YUJI, yuta: YUTA, megumi: MEGUMI, g4: CURSE_G4, g3: CURSE_G3, finger: FINGER_BEARER, hanami: HANAMI, jogo: JOGO, mahito: MAHITO, choso: CHOSO, jin: JIN, ayane: AYANE, bao: BAO };
+const ROSTER = ['yuji', 'gojo', 'sukuna', 'yuta', 'megumi', 'mahito', 'jogo', 'choso', 'jin', 'ayane', 'bao'];
 const CURSE_IDS = ['g4', 'g3', 'finger', 'hanami'];
 
 /* ---------------------------------------------------------------- Story Mode */
@@ -2703,6 +2844,16 @@ const STORY = [
       { enemy: 'choso', diff: 0.52, arena: 'shibuya', text: 'Case two: the eldest Death Painting brother left blood all over Shibuya. Close in before his beams pin you down.' },
       { enemy: 'yuta', diff: 0.64, arena: 'shinjuku', text: 'Case three: a special grade carrying a Queen of Curses. Answer Rika\'s reach with an Objection.' },
       { enemy: 'sukuna', diff: 0.85, arena: 'shinjuku', boss: true, text: 'The final case: the King of Curses himself. Open the Hall of the Scales and hand down the sentence.' },
+    ],
+  },
+  {
+    id: 'bao', title: 'The Bamboo Monk', hero: 'bao', kanji: '竹林',
+    blurb: 'A gentle panda leaves his mountain monastery when the curses come down from the hills.',
+    fights: [
+      { enemy: 'g4', diff: 0.3, arena: 'school', text: 'A small curse has been stealing from the monastery kitchen. Unacceptable. Show it the staff.' },
+      { enemy: 'hanami', diff: 0.45, arena: 'school', text: 'A forest curse thinks the bamboo groves belong to it. They do not.' },
+      { enemy: 'megumi', diff: 0.58, arena: 'shinjuku', text: 'A young sorcerer mistakes you for a curse and sends his shikigami. Smash through them — gently.' },
+      { enemy: 'jin', diff: 0.8, arena: 'shinjuku', boss: true, text: 'A greatsword-wielding mercenary has taken a contract on the "cursed panda." Stand your ground.' },
     ],
   },
 ];

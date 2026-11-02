@@ -145,14 +145,14 @@ const UI = {
           <div class="logo-sub"><span>CURSED</span> CLASH</div>
         </div>
         <nav class="menu-list">
-          <button class="nav" data-act="story"><b>Story Mode</b><small>Ten chapters against AI curses &amp; sorcerers</small></button>
+          <button class="nav" data-act="story"><b>Story Mode</b><small>Eleven chapters against AI curses &amp; sorcerers</small></button>
           <button class="nav" data-act="online"><b>Online Battle</b><small>Fight a friend over the internet with a room code</small></button>
           <button class="nav" data-act="cpu"><b>Versus CPU</b><small>Quick match against the AI</small></button>
           <button class="nav" data-act="gallery"><b>Character Gallery</b><small>Techniques, passives &amp; cursed spirits</small></button>
           <button class="nav" data-act="controls"><b>Controls</b><small>Key bindings &amp; tips</small></button>
           <button class="nav" data-act="settings"><b>Settings</b><small>Audio, effects &amp; round rules</small></button>
         </nav>
-        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back · <span class="build">build 8 · ${ROSTER.length} fighters</span></div>
+        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back · <span class="build">build 9 · ${ROSTER.length} fighters</span></div>
       </div>`;
     s.querySelectorAll('[data-act]').forEach(b => { b.onclick = () => this.menuAct(b.dataset.act); });
   },
