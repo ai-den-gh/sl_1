@@ -550,6 +550,7 @@ class Fighter {
     let m = 1;
     if (this.def.dmgMult) m *= this.def.dmgMult(this, h);
     if (this.buffs.rika) m *= 1.2;
+    if (this.buffs.redscale) m *= 1.15;
     return m;
   }
   ceRegenRate() {
@@ -584,6 +585,7 @@ class Fighter {
       for (const k of ['basic', 'heavy', 's0', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 'dash']) if (p[k]) { this.buf = k; this.bufT = 10; }
     }
     if (this.def.passiveTick) this.def.passiveTick(this);
+    if (this.buffs.redscale && this.anim % 4 === 0) FX.glow(this.x + U.rand(-18, 18), this.y - U.rand(10, 140) * this.scale, '#c4122f', 10, 16, 0, -1.4);
     if (this.buffs.burn && this.state !== 'ko') {
       this.hp = Math.max(1, this.hp - 0.18);
       if (this.anim % 4 === 0) FX.glow(this.x + U.rand(-16, 16), this.y - U.rand(20, 130) * this.scale, U.pick(['#ff9a2a', '#ff5a1a']), 9, 14, 0, -1.8);
@@ -643,7 +645,7 @@ class Fighter {
       if (p.up && this.y < FLOOR - 1) { this.dropT = 14; this.onGround = false; this.state = 'air'; return; }
       this.state = 'block'; this.vx *= 0.6; return;
     }
-    const dir = (h.right ? 1 : 0) - (h.left ? 1 : 0), sp = this.speed * slow;
+    const dir = (h.right ? 1 : 0) - (h.left ? 1 : 0), sp = this.speed * slow * (this.buffs.redscale ? 1.15 : 1);
     if (this.onGround) this.vx = U.lerp(this.vx, dir * sp, 0.3);
     else this.vx = U.clamp(this.vx + dir * 0.6, -sp * 1.15, sp * 1.15);
     if (p.up && this.jumps < 2) {

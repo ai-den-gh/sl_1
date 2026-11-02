@@ -70,10 +70,11 @@ kbd { display: inline-block; min-width: 1.8em; padding: 0.1em 0.4em; border: 1px
 .arena-card.focus { border-color: var(--gold); transform: translateY(-0.4em); box-shadow: 0 0.6em 1.4em rgba(0, 0, 0, 0.5); }
 
 /* ---------- story */
-.story-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.9em; width: 100%; }
+.story-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.7em; width: 100%; }
 .story-card { --c: #fff; display: flex; flex-direction: column; text-align: left; background: var(--panel);
   border: 2px solid var(--line); border-top: 0.3em solid var(--c); border-radius: 0.4em; overflow: hidden; }
-.story-prev { width: 100%; aspect-ratio: 160 / 190; display: block; background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.5)); }
+.story-card { flex-direction: row !important; }
+.story-prev { width: 7.5em; flex: none; aspect-ratio: 120 / 170; display: block; background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.5)); }
 .story-info { padding: 0.7em 0.9em 0.9em; display: flex; flex-direction: column; gap: 0.35em; flex: 1; }
 .story-num { font-size: 0.75em; color: var(--muted); letter-spacing: 0.1em; }
 .story-num span { color: var(--c); margin-left: 0.4em; }

@@ -204,7 +204,7 @@ const UI = {
       const hero = CHARS[ch.hero], done = prog[ch.id] || 0, total = ch.fights.length;
       const b = el('button', 'nav story-card' + (done >= total ? ' cleared' : ''));
       b.style.setProperty('--c', hero.color);
-      const c = el('canvas', 'story-prev'); prepCanvas(c, 160, 190);
+      const c = el('canvas', 'story-prev'); prepCanvas(c, 120, 170);
       b.appendChild(c);
       b.appendChild(el('div', 'story-info', `
         <div class="story-num">CHAPTER ${i + 1} <span>${ch.kanji}</span></div>
@@ -212,7 +212,7 @@ const UI = {
         <p>${ch.blurb}</p>
         <div class="pips">${ch.fights.map((f, j) => `<i class="${j < done ? 'on' : ''} ${f.boss ? 'boss' : ''}"></i>`).join('')}</div>
         <small>Play as ${hero.name}${done >= total ? ' · <em>CLEARED</em>' : ''}</small>`));
-      this.addPreview(c, hero, { scale: 1.15, glow: true });
+      this.addPreview(c, hero, { scale: 0.95, glow: true });
       b.onclick = () => { Sound.play('confirm'); Story.begin(i); };
       grid.appendChild(b);
     });
@@ -319,6 +319,7 @@ const UI = {
         ${row('Special techniques 1-4', k('U I O L'), `${k('Num4 Num5 Num6 Num7')} or ${k('P [ ] \\')}`)}
         ${row('5th technique (Yuji: Takeover · Yuta: Copy · Megumi: Mahoraga · Gojo: Blink Strike · Sukuna: World-Cutting Slash · Jogo: Coffin)', k('H'), `${k('Num8')} or ${k("'")}`)}
         ${row('6th technique (Gojo: Blue Max · Sukuna: Spiderweb)', k('G'), `${k('Num9')} or ${k(';')}`)}
+        ${row('6th–8th techniques (Yuji: Piercing Blood · Supernova · Flowing Red Scale)', `${k('G')} ${k('Y')} ${k('T')}`, `${k('Num9')} ${k('Num3')} ${k('Num.')}`)}
         ${row('7th technique (Gojo: Teleport · Sukuna: Dismantle Barrage)', k('Y'), `${k('Num3')} or ${k('-')}`)}
         ${row('8th technique (Gojo & Sukuna: Reverse Cursed Technique)', k('T'), `${k('Num.')} or ${k('=')}`)}
         ${row('Dash / dodge', k('Shift'), `${k('Num0')} or ${k('RShift')}`)}

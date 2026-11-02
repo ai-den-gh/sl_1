@@ -386,6 +386,89 @@ const MAHORAGA = {
 // Freezes the fight for a close-up of the caster weaving their domain's hand sign.
 function domainCutscene(f, sign, name) { World.cutscene = { f, def: f.def, sign, name, t: 150, max: 150 }; Sound.play('domain'); }
 
+/* ---------------------------------------------------------------- Blood Manipulation (Choso, and Yuji) */
+
+const BLOOD = '#c4122f';
+// Yuji pays for blood techniques with his own blood; Choso's body regenerates it freely.
+function bloodCost(f, n) {
+  if (f.def.bloodFree) return;
+  f.hp = Math.max(1, f.hp - n);
+  FX.blood(f.x, f.midY, 6, -f.facing, 3);
+}
+
+function piercingBloodMove(o) {
+  const fire = o.startup;
+  return {
+    id: o.id || 'piercing', kind: o.kind || 'special', startup: fire, active: 1, recovery: o.recovery || 20,
+    getPose: (f, fr) => (fr < fire ? POSES.sign : POSES.cast),
+    onStart(f) {
+      bloodCost(f, o.hp || 0);
+      if (o.onStart) o.onStart(f);
+      FX.text(f.x, f.y - 190, o.say || 'Piercing Blood', '#ff6a7a', o.big ? 26 : 18, 50);
+    },
+    onFrame(f, fr, t) {
+      if (o.big) f.invuln = Math.max(f.invuln, 2);
+      const hp = handPos(f);
+      if (fr < fire) {
+        // blood compressed between the palms
+        if (fr % 2 === 0) FX.glow(hp.x + U.rand(-40, 40) * (1 - fr / fire), hp.y + U.rand(-40, 40) * (1 - fr / fire), BLOOD, o.big ? 16 : 9, 8);
+        return;
+      }
+      if (fr !== fire) return;
+      Sound.play(o.big ? 'purple' : 'zap'); FX.shake(o.big ? 18 : 6);
+      if (o.big) FX.flash(BLOOD, 0.35);
+      const y = hp.y, w = o.width || 22;
+      spawnSummon(f, { life: o.big ? 30 : 14, x0: hp.x, y, dir: f.facing, w, render(ctx, e) {
+        const k = 1 - e.age / e.life, x1 = e.dir > 0 ? W + 40 : -40;
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = `rgba(196,18,47,${0.8 * k})`; ctx.fillRect(Math.min(e.x0, x1), e.y - e.w * k, Math.abs(x1 - e.x0), e.w * 2 * k);
+        ctx.fillStyle = `rgba(255,220,220,${k})`; ctx.fillRect(Math.min(e.x0, x1), e.y - e.w * 0.3 * k, Math.abs(x1 - e.x0), e.w * 0.6 * k);
+        ctx.restore();
+      } });
+      if (t && t.state !== 'ko' && (t.x - f.x) * f.facing > 0 && Math.abs(t.midY - y) < 70 + w)
+        Combat.hit(f, t, Object.assign({ kb: 8, kby: -4, stun: 26, hitstop: 8, fx: 'red', sfx: 'heavy', chip: 0.2, blood: 14, x: t.x, y, dir: f.facing }, o.hit));
+    },
+  };
+}
+
+function supernovaMove(o) {
+  return {
+    id: 'supernova', kind: 'special', startup: 18, active: 1, recovery: 20, poses: ['sign', 'cast'],
+    onStart(f) { bloodCost(f, o.hp || 0); FX.text(f.x, f.y - 190, 'Supernova', '#ff6a7a', 18, 50); },
+    onFrame(f, fr) {
+      if (fr !== 18) return;
+      Sound.play('charge');
+      for (let i = 0; i < 5; i++) {
+        const a = -Math.PI / 2 + (i - 2) * 0.55;
+        spawnProj(f, {
+          x: f.x + Math.cos(a) * 60, y: f.midY + Math.sin(a) * 60 - 20, r: 12, life: 110, clash: 1, wallKill: false, i,
+          hits: { dmg: o.dmg || 30, kb: 5, kby: -4, stun: 18, fx: 'red', blood: 5 },
+          tick(e, t) {
+            if (e.age < 16 + e.i * 3) { e.vx = 0; e.vy = 0; return; }
+            if (!e.launched && t) { const ang = Math.atan2(t.midY - e.y, t.x - e.x); e.vx = Math.cos(ang) * 12; e.vy = Math.sin(ang) * 12; e.launched = true; Sound.play('whoosh'); }
+            if (e.age % 2 === 0) FX.glow(e.x, e.y, BLOOD, 9, 8);
+          },
+          onEnd(e) { FX.explosion(e.x, e.y, 30, ['#ffd0d0', '#ff3a4a', BLOOD]); FX.blood(e.x, e.y, 6, 0, 4); },
+          render(ctx, e) { glowOrb(ctx, e.x, e.y, e.r, '#ffd0d0', BLOOD); },
+        });
+      }
+    },
+  };
+}
+
+function redScaleMove(o) {
+  return {
+    id: 'redscale', kind: 'special', startup: 16, active: 1, recovery: 10, poses: ['block', 'win'],
+    onFrame(f, fr) {
+      if (fr !== 16) return;
+      bloodCost(f, o.hp || 0);
+      f.buffs.redscale = o.frames || 480;
+      Sound.play('heal'); FX.ring(f.x, f.y - 80, BLOOD, 90, 20, 5); FX.spark(f.x, f.y - 80, '#ff6a7a', 14, 6);
+      FX.text(f.x, f.y - 195, 'Flowing Red Scale', '#ff6a7a', 20, 60);
+    },
+  };
+}
+
 // The technique Yuta's Copy would use right now.
 function copyTarget(f) {
   if (f.copied) return f.copied;
@@ -1038,6 +1121,21 @@ const YUJI = {
         if (f.usedTakeover || f.takeoverT > 0 || (o && o.baseDef.id === 'sukuna')) return null;
         return TAKEOVER_MOVE;
       },
+    },
+    {
+      name: 'Piercing Blood', icon: '穿', color: BLOOD, cost: 25, cd: 300, ai: { min: 150, max: 1280 },
+      desc: 'Compresses his own blood between his palms and fires it as a beam across the arena. Costs 20 health.',
+      move: piercingBloodMove({ startup: 22, hp: 20, hit: { dmg: 90 } }),
+    },
+    {
+      name: 'Supernova', icon: '星', color: '#ff6a7a', cost: 30, cd: 360, ai: { min: 100, max: 750 },
+      desc: 'Five orbs of blood circle Yuji, then hurtle at the opponent and burst. Costs 25 health.',
+      move: supernovaMove({ hp: 25, dmg: 30 }),
+    },
+    {
+      name: 'Flowing Red Scale', icon: '赤', color: '#ff3a4a', cost: 25, cd: 900, ai: { min: 0, max: 500, when: f => !f.buffs.redscale },
+      desc: 'Speeds up his blood flow: +15% speed and +15% damage for 8 seconds. Costs 15 health.',
+      move: redScaleMove({ hp: 15 }),
     },
   ],
 };
@@ -1844,10 +1942,100 @@ const MAHITO = {
   ],
 };
 
+/* ---------------------------------------------------------------- CHOSO */
+
+const CHOSO = {
+  id: 'choso', name: 'Choso', short: 'CHOSO', title: 'Death Painting Womb', kanji: '脹相', color: '#c4122f',
+  style: 'Ranged Blood Manipulation: beams, homing orbs and spinning blood blades.',
+  bio: 'The eldest of the Death Painting Wombs, half human and half cursed spirit. His body makes blood as fast as he can spend it.',
+  passive: { name: 'Cursed Womb Body', desc: 'Blood techniques cost Choso no health, and his blood steadily regenerates his body (+3 HP per second).' },
+  hp: 1050, speed: 1.0, bloodFree: true, melee: { power: 1.05 },
+  look: { skin: '#e9cdb8', top: '#3a2636', pants: '#d8d0c0', accent: BLOOD, eye: '#2a1a1a' },
+  aiStyle: { pref: 270, ranged: true },
+  passiveTick(f) { if (f.state !== 'ko' && World.active) f.hp = Math.min(f.maxHp, f.hp + 0.05); },
+  drawHair(g, hx, hy, r) {
+    const { ctx, col, o, OL } = g;
+    drawSpikyHair(g, hx, hy, r, [[-60, 5, 14], [-30, 7, 13], [0, 8, 13], [30, 7, 13], [60, 6, 13], [95, 5, 13]], '#151218');
+    // the two short spiky tails sticking up from the back and top
+    ctx.fillStyle = col('#151218'); ctx.strokeStyle = OL; ctx.lineWidth = 2;
+    for (const [a, l] of [[20, 14], [70, 13]]) {
+      const b = HP(hx, hy, a, r), t1 = HP(hx, hy, a - 8, r + l), t2 = HP(hx, hy, a + 8, r + l * 0.8);
+      ctx.beginPath(); ctx.moveTo(b[0], b[1]); ctx.lineTo(t1[0], t1[1]); ctx.lineTo(t2[0], t2[1]); ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    if (o.white || o.tint) return;
+    // the blood mark across the bridge of the nose
+    ctx.strokeStyle = '#3a0a10'; ctx.lineWidth = 3.5;
+    lineTo2(ctx, [hx + 2, hy + 4], [hx + r + 1, hy + 4]);
+  },
+  drawTorso(g) {
+    const { ctx, sk, col } = g;
+    ctx.strokeStyle = col('#d8d0c0'); ctx.lineWidth = 4;
+    lineTo2(ctx, sk.sh, [sk.sh[0] + 6, sk.sh[1] + 18]);
+  },
+  abilities: [
+    {
+      name: 'Piercing Blood', icon: '穿', color: BLOOD, cost: 20, cd: 220, ai: { min: 150, max: 1280 },
+      desc: 'Fires compressed blood as a lightning-fast beam that crosses the whole arena.',
+      move: piercingBloodMove({ startup: 18, hit: { dmg: 95 } }),
+    },
+    {
+      name: 'Supernova', icon: '星', color: '#ff6a7a', cost: 25, cd: 300, ai: { min: 100, max: 800 },
+      desc: 'Five orbs of blood orbit Choso, then hurtle at the opponent and burst.',
+      move: supernovaMove({ dmg: 34 }),
+    },
+    {
+      name: 'Slicing Exorcism', icon: '斬', color: '#ff3a4a', cost: 20, cd: 240, ai: { min: 60, max: 420 },
+      desc: 'Hurls two spinning discs of blood that carve through the opponent and boomerang back.',
+      move: {
+        id: 'slicing', kind: 'special', startup: 12, active: 1, recovery: 16, poses: ['castW', 'slash2'],
+        onFrame(f, fr) {
+          if (fr !== 12) return;
+          Sound.play('swish');
+          for (const [dy, delay] of [[-115, 0], [-70, 8]]) {
+            spawnProj(f, {
+              x: f.x + f.facing * 40, y: f.y + dy, vx: f.facing * 13, r: 22, life: 80, pierce: true, hitEvery: 10, wallKill: false, delay,
+              hits: { dmg: 22, kb: 3, stun: 16, fx: 'slash', color: '#ff3a4a', hitstop: 2, noScale: true, blood: 4 },
+              tick(e) {
+                if (e.age < e.delay) { e.vx = 0; return; }
+                if (e.age === e.delay) e.vx = f.facing * 13;
+                // after flying out, curve back to Choso and vanish when caught
+                if (e.age > e.delay + 26) e.vx = U.clamp(e.vx + (f.x > e.x ? 0.95 : -0.95), -14, 14);
+                if (e.age > e.delay + 40 && Math.abs(e.x - f.x) < 30) e.kill('return');
+              },
+              render(ctx, e) {
+                ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.age * 0.6);
+                ctx.fillStyle = BLOOD; ctx.strokeStyle = '#ffd0d0'; ctx.lineWidth = 2;
+                ctx.beginPath();
+                for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283; ctx.lineTo(Math.cos(a) * 22, Math.sin(a) * 22); ctx.lineTo(Math.cos(a + 0.4) * 12, Math.sin(a + 0.4) * 12); }
+                ctx.closePath(); ctx.fill(); ctx.stroke();
+                ctx.restore();
+              },
+            });
+          }
+        },
+      },
+    },
+    {
+      name: 'Convergence: Maximum', icon: '血', color: '#ff1f3d', cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 1280 },
+      desc: 'ULTIMATE. Converges every drop of blood into one colossal Piercing Blood that fills the arena\'s width.',
+      move: piercingBloodMove({
+        id: 'convergence', kind: 'ult', startup: 50, recovery: 24, big: true, width: 70, say: 'Convergence...',
+        onStart(f) { f.invuln = 60; FX.banner('BLOOD MANIPULATION', 'CONVERGENCE: MAXIMUM', '#ff4d6a', 120); FX.slow(35, 0.4); Sound.play('charge'); },
+        hit: { dmg: 260, kb: 18, kby: -12, launch: true, hitstop: 16, shake: 18, fx: 'red', sfx: 'boom', chip: 0.35, guardDmg: 90, blood: 30 },
+      }),
+    },
+    {
+      name: 'Flowing Red Scale', icon: '赤', color: '#ff3a4a', cost: 20, cd: 720, ai: { min: 0, max: 600, when: f => !f.buffs.redscale },
+      desc: 'Speeds up his blood flow: +15% speed and +15% damage for 10 seconds.',
+      move: redScaleMove({ frames: 600 }),
+    },
+  ],
+};
+
 /* ---------------------------------------------------------------- roster */
 
-const CHARS = { gojo: GOJO, sukuna: SUKUNA, yuji: YUJI, yuta: YUTA, megumi: MEGUMI, g4: CURSE_G4, g3: CURSE_G3, finger: FINGER_BEARER, hanami: HANAMI, jogo: JOGO, mahito: MAHITO };
-const ROSTER = ['yuji', 'gojo', 'sukuna', 'yuta', 'megumi', 'mahito', 'jogo'];
+const CHARS = { gojo: GOJO, sukuna: SUKUNA, yuji: YUJI, yuta: YUTA, megumi: MEGUMI, g4: CURSE_G4, g3: CURSE_G3, finger: FINGER_BEARER, hanami: HANAMI, jogo: JOGO, mahito: MAHITO, choso: CHOSO };
+const ROSTER = ['yuji', 'gojo', 'sukuna', 'yuta', 'megumi', 'mahito', 'jogo', 'choso'];
 const CURSE_IDS = ['g4', 'g3', 'finger', 'hanami'];
 
 /* ---------------------------------------------------------------- Story Mode */
@@ -1901,6 +2089,36 @@ const STORY = [
       { enemy: 'g3', diff: 0.4, arena: 'womb', text: 'This one spits from range. Nue strikes from above — use it.' },
       { enemy: 'hanami', diff: 0.55, arena: 'school', text: 'The forest itself attacks. Snare it with the Toad and press in.' },
       { enemy: 'mahito', diff: 0.72, arena: 'shibuya', boss: true, text: 'Shibuya Station. Mahito blocks the way. Flood the arena with shadow and stop him here.' },
+    ],
+  },
+  {
+    id: 'choso', title: 'Death Painting', hero: 'choso', kanji: '九相図',
+    blurb: 'The eldest of nine cursed brothers walks Shibuya with blood on his hands — and a debt to collect.',
+    fights: [
+      { enemy: 'g3', diff: 0.35, arena: 'womb', text: 'You and your brothers have woken in a world that sealed you away. A curse gets in your way. Show it what Blood Manipulation can do.' },
+      { enemy: 'megumi', diff: 0.48, arena: 'shibuya', text: 'A Ten Shadows sorcerer is hunting your kind through the station. Keep your distance from his shikigami and pierce through them.' },
+      { enemy: 'yuji', diff: 0.62, arena: 'shibuya', text: 'The vessel who killed your brothers. Your blood boils — but something about him feels... familiar.' },
+      { enemy: 'mahito', diff: 0.8, arena: 'shinjuku', boss: true, text: 'You remember now. You are the older brother, and older brothers protect the younger. Mahito has been toying with your family. End it.' },
+    ],
+  },
+  {
+    id: 'jogo', title: 'Disaster of the Earth', hero: 'jogo', kanji: '大地の災い',
+    blurb: 'Jogo sets out to prove that cursed spirits are the true humans — and to burn the strongest sorcerer to ash.',
+    fights: [
+      { enemy: 'megumi', diff: 0.42, arena: 'school', text: 'Jujutsu High. Test your flames on the Ten Shadows boy. Burn his shikigami before they surround you.' },
+      { enemy: 'yuji', diff: 0.52, arena: 'shibuya', text: 'Sukuna\'s vessel stands in your way. Keep him at range — he hits far too hard up close.' },
+      { enemy: 'yuta', diff: 0.66, arena: 'shinjuku', text: 'A special grade with a curse of his own. Rika\'s reach is long — let the volcano do the work from below.' },
+      { enemy: 'gojo', diff: 0.86, arena: 'shinjuku', boss: true, text: 'Satoru Gojo. The one who humiliated you. Open your domain and seal him inside the Coffin of the Iron Mountain.' },
+    ],
+  },
+  {
+    id: 'mahito', title: 'Idle Transfiguration', hero: 'mahito', kanji: '無為転変',
+    blurb: 'Mahito toys with souls across Japan, chasing the one boy whose soul he can never touch.',
+    fights: [
+      { enemy: 'g3', diff: 0.32, arena: 'womb', text: 'A lesser curse. Practice reshaping your body — let your arm blade do the talking.' },
+      { enemy: 'megumi', diff: 0.46, arena: 'school', text: 'A sorcerer with a shadow full of beasts. Get close enough to touch his soul.' },
+      { enemy: 'yuta', diff: 0.62, arena: 'shibuya', text: 'Rika guards this one jealously. Repel her arm and land a Soul Touch on Yuta.' },
+      { enemy: 'yuji', diff: 0.82, arena: 'shibuya', boss: true, text: 'Yuji Itadori. The only one who sees your soul. Prove that you are what he will become.' },
     ],
   },
 ];
