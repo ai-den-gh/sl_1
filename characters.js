@@ -1634,40 +1634,41 @@ const MEGUMI = {
       },
     },
     {
-      name: 'Rabbit Escape', icon: '兎', color: '#f2f2f6', cost: 15, cd: 300, ai: { min: 0, max: 160 },
-      desc: 'Instantly bursts into a swarm of rabbits that shoot out in every direction — clipping anyone in the way — while Megumi leaps clear. The landed rabbits soak up incoming projectiles and attacks until destroyed.',
+      name: 'Rabbit Escape', icon: '兎', color: '#f2f2f6', cost: 20, cd: 300, ai: { min: 0, max: 700 },
+      desc: 'Flings a rapid barrage of shadow rabbits straight ahead like a beam. Each rabbit that connects nibbles the opponent and swats away projectiles; the rest tumble to the ground and scatter, still soaking up attacks.',
       move: {
-        id: 'rabbits', kind: 'special', startup: 1, active: 1, recovery: 6, poses: ['sign', 'jump'],
+        id: 'rabbits', kind: 'special', startup: 4, active: 0, recovery: 0, total: 42, poses: ['castW', 'cast'],
+        getPose: (f, fr) => (fr < 4 ? POSES.castW : fr < 36 ? POSES.cast : POSES.idle),
         onFrame(f, fr) {
-          if (fr !== 1) return;
-          Sound.play('whoosh'); Sound.play('dash'); FX.smoke(f.x, f.y - 30, '#1a1028', 14, 34, 20); FX.ring(f.x, f.y - 60, '#f2f2f6', 110, 14, 4);
-          const ox = f.x, oy = f.y - 60;
-          f.invuln = Math.max(f.invuln, 24); f.vx = -f.facing * 18; f.vy = -11; f.onGround = false;
-          // the swarm erupts out of Megumi in every direction, nicking anyone it flies through
-          for (let i = 0; i < 16; i++) {
-            const a = -Math.PI * (0.05 + 0.9 * (i / 15)), sp = U.rand(11, 19);
-            spawnSummon(f, {
-              x: ox, y: oy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: Math.round(U.rand(130, 170) * f.summonMult()), r: 14, clash: 1,
-              dir: Math.cos(a) >= 0 ? 1 : -1, flying: true, pierce: true,
-              hits: { dmg: 6, kb: 3, stun: 8, noScale: true, quiet: true, hitstop: 0, sfx: 'tick', color: '#f2f2f6' },
-              name: 'RABBIT', hp: 10, maxHp: 10, noBar: true, hurtbox: e => ({ x: e.x - 12, y: e.y - 22, w: 24, h: 22 }),
-              tick(e) {
-                if (e.flying) {
-                  e.vy += 0.75; e.vx *= 0.985;
-                  if (e.age % 2 === 0) FX.add({ type: 'smoke', x: e.x, y: e.y, life: 12, size: 4, color: '#d8d8e8', drag: 0.9 });
-                  if (e.x < World.left + 10 || e.x > World.right - 10) { e.vx = -e.vx * 0.4; e.x = U.clamp(e.x, World.left + 10, World.right - 10); }
-                  if (e.y >= FLOOR && e.vy > 0) { e.flying = false; e.y = FLOOR; e.vx = 0; e.vy = 0; e.hits = null; FX.dust(e.x, FLOOR, 2); }
-                  return;
-                }
-                e.hop = (e.hop || U.randInt(0, 20)) + 1;
+          if (fr === 4) { Sound.play('dash'); FX.smoke(f.x + f.facing * 40, f.y - 100, '#1a1028', 8, 18, 14); }
+          if (fr < 4 || fr >= 34 || fr % 2) return;
+          if (fr % 6 === 0) Sound.play('whoosh');
+          const hp = handPos(f);
+          spawnSummon(f, {
+            x: hp.x, y: hp.y + U.rand(-10, 10), vx: f.facing * U.rand(17, 22), vy: U.rand(-1.6, 1.2), r: 14, clash: 1, pierce: true,
+            life: Math.round(U.rand(120, 160) * f.summonMult()), dir: f.facing, flying: true,
+            hits: { dmg: 7, kb: 2, stun: 10, noScale: true, quiet: true, hitstop: 0, sfx: 'tick', color: '#f2f2f6' },
+            onHit(e) { e.vx = -e.vx * 0.25; e.vy = -5; e.hits = null; },
+            name: 'RABBIT', hp: 10, maxHp: 10, noBar: true, hurtbox: e => ({ x: e.x - 12, y: e.y - 22, w: 24, h: 22 }),
+            tick(e) {
+              if (e.flying) {
+                // the beam flies nearly flat, then the rabbits drop and land
+                e.vy += e.age < 14 ? 0.05 : 0.8;
+                if (e.age % 2 === 0) FX.add({ type: 'smoke', x: e.x, y: e.y, life: 10, size: 4, color: '#d8d8e8', drag: 0.9 });
+                if (e.x < World.left + 10 || e.x > World.right - 10) { e.vx = -e.vx * 0.3; e.x = U.clamp(e.x, World.left + 10, World.right - 10); }
+                if (e.y >= FLOOR && e.vy > 0) { e.flying = false; e.y = FLOOR; e.vx = 0; e.vy = 0; e.hits = null; e.dir = U.pick([-1, 1]); FX.dust(e.x, FLOOR, 2); }
+                return;
+              }
+              e.hop = (e.hop || U.randInt(0, 20)) + 1;
               if (e.hop % 22 === 0) e.dir = Math.random() < 0.3 ? -e.dir : e.dir;
-                e.x = U.clamp(e.x + e.dir * 1.6, World.left + 10, World.right - 10);
-                e.y = FLOOR - Math.abs(Math.sin(e.hop * 0.28)) * 14;
-                e.vy = 0;
-              },
-            onEnd(e) { FX.smoke(e.x, FLOOR - 10, '#1a1028', 2, 6, 8); },
+              e.x = U.clamp(e.x + e.dir * 1.6, World.left + 10, World.right - 10);
+              e.y = FLOOR - Math.abs(Math.sin(e.hop * 0.28)) * 14;
+              e.vy = 0;
+            },
+            onEnd(e) { FX.smoke(e.x, e.y - 10, '#1a1028', 2, 6, 8); },
             render(ctx, e) {
               ctx.save(); ctx.translate(e.x, e.y); ctx.scale(e.dir, 1);
+              if (e.flying) ctx.rotate(Math.atan2(e.vy, Math.abs(e.vx)) * 0.6);
               ctx.globalAlpha = Math.min(1, (e.life - e.age) / 10);
               ctx.fillStyle = '#f2f2f6'; ctx.strokeStyle = '#16161c'; ctx.lineWidth = 1.5;
               ctx.beginPath(); ctx.ellipse(0, -8, 10, 7, 0, 0, 6.283); ctx.fill(); ctx.stroke();
@@ -1677,7 +1678,6 @@ const MEGUMI = {
               ctx.restore();
             },
           });
-          }
         },
       },
     },
