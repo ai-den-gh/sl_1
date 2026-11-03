@@ -356,6 +356,65 @@ function drawSwordFieldBg(ctx, d, a) {
   ctx.restore();
 }
 
+// Hanami's domain: a golden meadow of glowing grass that spreads outward from where it was cast.
+function drawGrassSeaBg(ctx, d, a) {
+  if (!d.blades) d.blades = Array.from({ length: 220 }, (_, i) => ({ x: (i * 37.3) % (W + 60) - 30, h: 30 + (i * 53) % 90, ph: i * 0.7, row: i % 4 }));
+  if (!d.flowers) d.flowers = Array.from({ length: 40 }, (_, i) => ({ x: (i * 97.7) % W, y: FLOOR - 6 - (i * 29) % 70, c: ['#ffb3d9', '#ffffff', '#ffe08a', '#c8b0ff'][i % 4] }));
+  const grow = Math.min(1, d.age / 70), R = 40 + grow * grow * 1600, fadeOut = Math.min(1, (d.life - d.age) / 25);
+  ctx.save();
+  ctx.beginPath(); ctx.arc(d.cx, d.cy, R, 0, 6.283); ctx.clip();
+  ctx.globalAlpha = fadeOut;
+  // luminous sky
+  const sky = ctx.createLinearGradient(0, 0, 0, FLOOR);
+  sky.addColorStop(0, '#6ac4d8'); sky.addColorStop(0.55, '#ffe9b8'); sky.addColorStop(1, '#fff6dc');
+  ctx.fillStyle = sky; ctx.fillRect(-30, -30, W + 60, H + 60);
+  // soft sun and its rays
+  const sun = ctx.createRadialGradient(W / 2, 170, 10, W / 2, 170, 420);
+  sun.addColorStop(0, 'rgba(255,255,235,0.95)'); sun.addColorStop(0.25, 'rgba(255,240,180,0.5)'); sun.addColorStop(1, 'rgba(255,240,180,0)');
+  ctx.fillStyle = sun; ctx.fillRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 9; i++) {
+    const an = -Math.PI / 2 + (i - 4) * 0.22 + Math.sin(d.age * 0.01 + i) * 0.03;
+    ctx.fillStyle = 'rgba(255,245,200,0.07)';
+    ctx.beginPath(); ctx.moveTo(W / 2, 170); ctx.lineTo(W / 2 + Math.cos(an - 0.05) * 1200, 170 - Math.sin(an - 0.05) * -1200); ctx.lineTo(W / 2 + Math.cos(an + 0.05) * 1200, 170 - Math.sin(an + 0.05) * -1200); ctx.closePath(); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  // rolling green hills of grass
+  for (let k = 0; k < 3; k++) {
+    ctx.fillStyle = ['#9ad86a', '#7cc458', '#5fae46'][k];
+    ctx.beginPath(); ctx.moveTo(-30, FLOOR + 40);
+    for (let x = -30; x <= W + 30; x += 40) ctx.lineTo(x, 430 + k * 55 + Math.sin(x * 0.006 + k * 2) * 26);
+    ctx.lineTo(W + 30, FLOOR + 40); ctx.closePath(); ctx.fill();
+  }
+  ctx.fillStyle = '#4f9a3a'; ctx.fillRect(-30, FLOOR, W + 60, H - FLOOR + 30);
+  // shining grass blades swaying in the light
+  ctx.lineCap = 'round';
+  for (const b of d.blades) {
+    const sway = Math.sin(d.age * 0.05 + b.ph) * 8, base = FLOOR + 6 - b.row * 6;
+    ctx.strokeStyle = ['#bff58a', '#9ae070', '#d8ffa0', '#86d060'][b.row]; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(b.x, base); ctx.quadraticCurveTo(b.x + sway * 0.4, base - b.h * 0.6, b.x + sway, base - b.h); ctx.stroke();
+    ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(255,255,200,0.25)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(b.x, base); ctx.quadraticCurveTo(b.x + sway * 0.4, base - b.h * 0.6, b.x + sway, base - b.h); ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  // blossoms dotting the meadow
+  for (const fl of d.flowers) {
+    const bob = Math.sin(d.age * 0.06 + fl.x) * 2;
+    ctx.fillStyle = fl.c;
+    for (let i = 0; i < 5; i++) { const an = i / 5 * 6.283 + d.age * 0.01; ctx.beginPath(); ctx.arc(fl.x + Math.cos(an) * 4, fl.y + bob + Math.sin(an) * 4, 3, 0, 6.283); ctx.fill(); }
+    ctx.fillStyle = '#ffd34d'; ctx.beginPath(); ctx.arc(fl.x, fl.y + bob, 2.2, 0, 6.283); ctx.fill();
+  }
+  ctx.restore();
+  // a bright glowing rim marks the edge as the domain sweeps outward
+  if (grow < 1) {
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = 'rgba(255,240,180,0.85)'; ctx.lineWidth = 14;
+    ctx.beginPath(); ctx.arc(d.cx, d.cy, R, 0, 6.283); ctx.stroke();
+    ctx.strokeStyle = 'rgba(200,255,160,0.5)'; ctx.lineWidth = 34; ctx.stroke();
+    ctx.restore();
+  }
+}
+
 function drawHandsBg(ctx, d, a) {
   ctx.save(); ctx.globalAlpha = a;
   const g = ctx.createLinearGradient(0, 0, 0, H);
@@ -2038,7 +2097,62 @@ const HANAMI = {
         },
       },
     },
-    null,
+    {
+      name: 'Sea of Shining Grasses', icon: '輝', color: '#ffe9a8', cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 1280 },
+      desc: 'DOMAIN EXPANSION. A sea of glowing grass and blossoms spreads outward from Hanami until it fills the world. Inside it nothing happens — every opponent simply stands frozen in the light — and when it fades, they explode in a storm of petals.',
+      move: {
+        id: 'grasssea', kind: 'ult', startup: 60, active: 0, recovery: 0, poses: ['sign', 'sign'],
+        onStart(f) { f.invuln = 70; domainCutscene(f, 'hands', 'SEA OF SHINING GRASSES'); FX.banner('DOMAIN EXPANSION', 'SEA OF SHINING GRASSES', '#ffe9a8', 130); FX.slow(40, 0.35); Sound.play('charge'); },
+        onFrame(f, fr) {
+          f.invuln = Math.max(f.invuln, 2);
+          if (fr !== 40) return;
+          Domains.start(f, {
+            type: 'grasssea', life: 300, bg: drawGrassSeaBg, cx: f.x, cy: f.y - 60,
+            onStart(d, t) { t.applyStun(310, true, true); },
+            tick(d) {
+              // purely beautiful: drifting petals and rising motes of light
+              if (d.age % 2 === 0) FX.add({ type: 'glow', x: U.rand(0, W), y: FLOOR - U.rand(0, 60), vx: U.rand(-0.3, 0.3), vy: U.rand(-1.6, -0.6), life: 70, size: U.rand(4, 8), color: U.pick(['#fff3c0', '#ffe08a', '#d8ffb0']), drag: 0.995 });
+              if (d.age % 4 === 0) FX.add({ type: 'clover', x: U.rand(-40, W), y: U.rand(-20, 200), vx: U.rand(0.6, 1.6), vy: U.rand(0.5, 1.2), life: 140, size: U.rand(3, 5), color: U.pick(['#ffc8e0', '#ffffff', '#ffb3d9']), drag: 1, rot: Math.random() * 6, vr: U.rand(-0.06, 0.06) });
+            },
+            onEnd(d, interrupted) {
+              if (interrupted) return;
+              // the light fades... and everyone caught inside bursts
+              FX.flash('#fff3c0', 0.8); FX.shake(24); Sound.play('boom');
+              for (const v of World.enemies(f)) {
+                if (v.state === 'ko') continue;
+                v.stun = 0; v.frozen = false; v.setState('idle');
+                FX.explosion(v.x, v.midY, 150, ['#ffffff', '#ffe08a', '#ff9ad0']);
+                for (let i = 0; i < 30; i++) FX.add({ type: 'clover', x: v.x, y: v.midY, vx: U.rand(-9, 9), vy: U.rand(-11, 3), life: U.rand(50, 80), size: U.rand(4, 7), color: U.pick(['#ffb3d9', '#ffffff', '#cde88a']), grav: 0.2, drag: 0.97, rot: Math.random() * 6, vr: U.rand(-0.2, 0.2) });
+                Combat.hit(f, v, { dmg: 230, kb: 14, kby: -15, launch: true, unblockable: true, sureHit: true, noScale: true, hitstop: 18, shake: 18, sfx: 'boom', color: '#ffe08a', type: 'domain', x: v.x, y: v.midY, dir: dirTo(f, v) });
+              }
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Bud Barrage', icon: '芽', color: '#cde88a', cost: 25, cd: 260, ai: { min: 100, max: 650 },
+      desc: 'Flings a rapid stream of hard seed pods straight ahead, each bursting into petals on impact.',
+      move: {
+        id: 'budbarrage', kind: 'special', startup: 6, active: 0, recovery: 0, total: 46, poses: ['castW', 'cast'],
+        getPose: (f, fr) => (fr < 6 ? POSES.castW : fr < 40 ? (Math.floor(fr / 4) % 2 ? POSES.cast : POSES.point) : POSES.idle),
+        onFrame(f, fr) {
+          if (fr < 6 || fr >= 40 || fr % 3) return;
+          if (fr % 6 === 0) Sound.play('whoosh');
+          const hp = handPos(f);
+          spawnProj(f, {
+            x: hp.x, y: hp.y + U.rand(-14, 14), vx: f.facing * U.rand(15, 19), vy: U.rand(-1.2, 1.2), r: 10, life: 60, clash: 1,
+            hits: { dmg: 11, kb: 2, stun: 12, noScale: true, hitstop: 1, color: '#cde88a', sfx: 'hit' },
+            onEnd(e, why) { if (why === 'hit') FX.add({ type: 'clover', x: e.x, y: e.y, vx: U.rand(-2, 2), vy: -2, life: 30, size: 5, color: '#ffb3d9', drag: 0.95, rot: 0, vr: 0.1 }); FX.spark(e.x, e.y, '#ffb3d9', 4, 3); },
+            render(ctx, e) {
+              ctx.fillStyle = '#6a8a3a'; ctx.strokeStyle = '#2a3a14'; ctx.lineWidth = 1.5;
+              ctx.beginPath(); ctx.ellipse(e.x, e.y, 9, 7, e.age * 0.3, 0, 6.283); ctx.fill(); ctx.stroke();
+              ctx.fillStyle = '#ffb3d9'; ctx.beginPath(); ctx.arc(e.x - Math.sign(e.vx) * 4, e.y - 3, 3.5, 0, 6.283); ctx.fill();
+            },
+          });
+        },
+      },
+    },
   ],
 };
 
