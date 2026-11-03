@@ -406,7 +406,10 @@ const MAHORAGA = {
 };
 
 // Freezes the fight for a close-up of the caster weaving their domain's hand sign.
-function domainCutscene(f, sign, name) { World.cutscene = { f, def: f.def, sign, name, t: 150, max: 150 }; Sound.play('domain'); }
+function domainCutscene(f, sign, name, opts = {}) {
+  World.cutscene = Object.assign({ f, def: f.def, sign, name, t: 150, max: 150, title: 'DOMAIN EXPANSION', kanji: '領域展開' }, opts);
+  Sound.play('domain');
+}
 
 /* ---------------------------------------------------------------- Blood Manipulation (Choso, and Yuji) */
 
@@ -1562,6 +1565,7 @@ const MEGUMI = {
         id: 'mahoraga', kind: 'special', startup: 50, active: 0, recovery: 0, poses: ['sign', 'sign'],
         onStart(f) {
           f.invuln = 55;
+          domainCutscene(f, 'shadow', 'DIVINE GENERAL MAHORAGA', { title: 'WITH THIS TREASURE, I SUMMON...', kanji: '召喚' });
           FX.banner('EIGHT-HANDLED SWORD', 'DIVINE GENERAL MAHORAGA', '#f2efe6', 130); FX.slow(35, 0.4); Sound.play('charge');
         },
         onFrame(f, fr) {

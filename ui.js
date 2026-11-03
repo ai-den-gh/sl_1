@@ -152,7 +152,7 @@ const UI = {
           <button class="nav" data-act="controls"><b>Controls</b><small>Key bindings &amp; tips</small></button>
           <button class="nav" data-act="settings"><b>Settings</b><small>Audio, effects &amp; round rules</small></button>
         </nav>
-        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back · <span class="build">build 12 · ${ROSTER.length} fighters</span></div>
+        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back · <span class="build">build 13 · ${ROSTER.length} fighters</span></div>
       </div>`;
     s.querySelectorAll('[data-act]').forEach(b => { b.onclick = () => this.menuAct(b.dataset.act); });
   },
@@ -627,8 +627,10 @@ const UI = {
     const pop = 1 + Math.max(0, 1 - t / 8) * 0.5;
     ctx.save(); ctx.translate(W / 2, H - 150); ctx.scale(pop, pop);
     ctx.font = 'italic 900 100px Impact, "Arial Black", sans-serif';
-    ctx.lineWidth = 12; ctx.strokeStyle = '#000'; ctx.strokeText('DOMAIN EXPANSION', 0, 0);
-    ctx.fillStyle = '#ffffff'; ctx.fillText('DOMAIN EXPANSION', 0, 0);
+    const title = c.title || 'DOMAIN EXPANSION', tw = ctx.measureText(title).width;
+    if (tw > W - 80) ctx.scale((W - 80) / tw, (W - 80) / tw);
+    ctx.lineWidth = 12; ctx.strokeStyle = '#000'; ctx.strokeText(title, 0, 0);
+    ctx.fillStyle = '#ffffff'; ctx.fillText(title, 0, 0);
     ctx.restore();
     if (c.name) {
       ctx.globalAlpha = a * Math.min(1, Math.max(0, (t - 10) / 10));
@@ -637,7 +639,7 @@ const UI = {
       ctx.fillStyle = def.color; ctx.fillText(c.name, W / 2, H - 78);
     }
     ctx.globalAlpha = a; ctx.font = '900 54px "Noto Sans JP", "Yu Gothic", sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.fillText('領域展開', W / 2, 70);
+    ctx.fillText(c.kanji || '領域展開', W / 2, 70);
     ctx.restore();
   },
 
@@ -718,14 +720,14 @@ const UI = {
     ctx.fillStyle = def.color; ctx.fillRect(0, top - 3, W, 3); ctx.fillRect(0, top + bh, W, 3);
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.font = '900 66px "Noto Sans JP", "Yu Gothic", "Hiragino Sans", sans-serif';
-    ['領', '域', '展', '開'].forEach((ch, i) => {
+    (c.kanji || '領域展開').split('').forEach((ch, i) => {
       ctx.globalAlpha = a * Math.min(1, Math.max(0, (t - 6 - i * 5) / 8));
       ctx.lineWidth = 6; ctx.strokeStyle = '#000'; ctx.strokeText(ch, W - 130, top + 90 + i * 100);
       ctx.fillStyle = '#ffffff'; ctx.fillText(ch, W - 130, top + 90 + i * 100);
     });
     ctx.globalAlpha = a;
     ctx.font = '800 18px "Segoe UI", sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    ctx.fillText('D O M A I N   E X P A N S I O N', W / 2, top + bh + 50);
+    ctx.fillText((c.title || 'DOMAIN EXPANSION').split('').join(' '), W / 2, top + bh + 50);
     ctx.restore();
   },
 };
