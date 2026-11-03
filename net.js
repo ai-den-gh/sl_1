@@ -34,38 +34,101 @@ class NetController {
   }
 }
 
+// Peer-to-peer fallback (used when there is no relay, e.g. on static hosts like Vercel):
+// PeerJS's free public broker only introduces the two browsers; game data flows directly between them.
+const PEERJS_URL = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+const PEER_PREFIX = 'jjk-cursed-clash-';
+const roomCode = () => Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random() * 24)]).join('');
+
 const Net = {
   ws: null, role: null, code: null, inMatch: false, savedSettings: null,
+  via: null,            // 'ws' (serve.py relay) or 'p2p' (direct WebRTC via PeerJS)
+  peer: null, conn: null,
   lock: { tick: 0, delay: 4, local: new Map(), remote: new Map(), rng: null, stall: 0, kb: null, hashes: new Map(), desync: false },
 
   url() { return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws'; },
 
-  connect() {
-    return new Promise((resolve, reject) => {
-      if (this.ws && this.ws.readyState === 1) { resolve(); return; }
-      let ws;
-      try { ws = new WebSocket(this.url()); } catch (e) { reject(e); return; }
-      ws.onopen = () => resolve();
-      ws.onerror = () => reject(new Error('Could not reach the game server.'));
-      ws.onmessage = e => { try { this.onMessage(JSON.parse(e.data)); } catch (err) { /* ignore malformed */ } };
-      ws.onclose = () => { if (this.ws === ws) this.onDisconnect(); };
-      this.ws = ws;
+  // ---- transport 1: the WebSocket relay built into serve.py (resolves false if it isn't there)
+  openRelay() {
+    if (this.via === 'ws' && this.ws && this.ws.readyState === 1) return Promise.resolve(true);
+    return new Promise(resolve => {
+      let ws, settled = false;
+      const finish = ok => { if (settled) return; settled = true; clearTimeout(timer); if (!ok) { try { ws.close(); } catch (e) { /* ignore */ } } resolve(ok); };
+      const timer = setTimeout(() => finish(false), 2500);
+      try { ws = new WebSocket(this.url()); } catch (e) { finish(false); return; }
+      ws.onopen = () => {
+        this.ws = ws; this.via = 'ws';
+        ws.onmessage = e => { try { this.onMessage(JSON.parse(e.data)); } catch (err) { /* ignore malformed */ } };
+        ws.onclose = () => { if (this.ws === ws) this.onDisconnect(); };
+        finish(true);
+      };
+      ws.onerror = () => finish(false);
     });
   },
-  send(o) { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(o)); },
-  close() {
-    this.endMatch();
-    const ws = this.ws; this.ws = null; this.role = null; this.code = null;
-    if (ws) try { ws.close(); } catch (e) { /* already closed */ }
+
+  // ---- transport 2: direct peer-to-peer connection brokered by PeerJS
+  loadPeerJs() {
+    if (window.Peer) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = PEERJS_URL; s.async = true;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('Could not load the online library. Check your internet connection.'));
+      document.head.appendChild(s);
+    });
+  },
+  p2pHost(tries = 0) {
+    const code = roomCode(), peer = new Peer(PEER_PREFIX + code);
+    this.peer = peer; this.via = 'p2p';
+    peer.on('open', () => this.onMessage({ t: 'room', code }));
+    peer.on('connection', conn => { if (this.conn) { conn.close(); return; } this.attachConn(conn, 'host', code); });
+    peer.on('error', e => {
+      if (e.type === 'unavailable-id' && tries < 5) { peer.destroy(); this.p2pHost(tries + 1); }
+      else this.p2pError(e, code);
+    });
+  },
+  p2pJoin(code) {
+    const peer = new Peer();
+    this.peer = peer; this.via = 'p2p';
+    peer.on('open', () => this.attachConn(peer.connect(PEER_PREFIX + code, { reliable: true, serialization: 'json' }), 'guest', code));
+    peer.on('error', e => this.p2pError(e, code));
+  },
+  attachConn(conn, role, code) {
+    this.conn = conn;
+    conn.on('open', () => this.onMessage({ t: 'start', role, code }));
+    conn.on('data', d => { try { this.onMessage(typeof d === 'string' ? JSON.parse(d) : d); } catch (e) { /* ignore malformed */ } });
+    conn.on('close', () => { if (this.conn === conn) { this.conn = null; this.onMessage({ t: 'left' }); } });
+  },
+  p2pError(e, code) {
+    const msg = e.type === 'peer-unavailable' ? `Room ${code} not found. Check the code and make sure the host is still waiting.`
+      : ['network', 'server-error', 'socket-error', 'socket-closed'].includes(e.type) ? 'Could not reach the online matchmaking service. Check your internet connection and try again.'
+      : `Online error: ${e.type || e.message}`;
+    UI.onlineStatus(msg, true);
   },
 
+  send(o) {
+    if (this.via === 'p2p') { if (this.conn && this.conn.open) this.conn.send(o); }
+    else if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(o));
+  },
+  close() {
+    this.endMatch();
+    const ws = this.ws, peer = this.peer;
+    this.ws = null; this.peer = null; this.conn = null; this.via = null; this.role = null; this.code = null;
+    if (ws) try { ws.close(); } catch (e) { /* already closed */ }
+    if (peer) try { peer.destroy(); } catch (e) { /* already closed */ }
+  },
+  get connected() { return !!(this.ws || this.peer); },
+
+  // Uses the local relay when it is running, otherwise connects peer-to-peer.
   async create() {
-    await this.connect();
-    this.send({ t: 'create' });
+    if (await this.openRelay()) { this.send({ t: 'create' }); return; }
+    await this.loadPeerJs();
+    this.p2pHost();
   },
   async join(code) {
-    await this.connect();
-    this.send({ t: 'join', code });
+    if (await this.openRelay()) { this.send({ t: 'join', code }); return; }
+    await this.loadPeerJs();
+    this.p2pJoin(code);
   },
 
   onMessage(m) {

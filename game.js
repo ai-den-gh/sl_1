@@ -410,7 +410,7 @@ const Game = {
   pause() { this.paused = true; Sound.play('select'); UI.show('pause', { back: () => this.resume() }); },
   resume() { this.paused = false; UI.show(null); },
   restart() { this.paused = false; this.startMatch(this.match.cfg); },
-  toMenu() { this.paused = false; if (Net.ws) Net.close(); this.startDemo(); UI.openMenu(0); },
+  toMenu() { this.paused = false; if (Net.connected) Net.close(); this.startDemo(); UI.openMenu(0); },
 
   startDemo() {
     const p1 = U.pick(ROSTER); let p2 = U.pick(ROSTER);

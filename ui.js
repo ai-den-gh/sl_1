@@ -152,7 +152,7 @@ const UI = {
           <button class="nav" data-act="controls"><b>Controls</b><small>Key bindings &amp; tips</small></button>
           <button class="nav" data-act="settings"><b>Settings</b><small>Audio, effects &amp; round rules</small></button>
         </nav>
-        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back · <span class="build">build 9 · ${ROSTER.length} fighters</span></div>
+        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back · <span class="build">build 10 · ${ROSTER.length} fighters</span></div>
       </div>`;
     s.querySelectorAll('[data-act]').forEach(b => { b.onclick = () => this.menuAct(b.dataset.act); });
   },
@@ -171,7 +171,7 @@ const UI = {
   openOnline() {
     const s = $('#scr-online');
     s.innerHTML = `<div class="panel-wrap narrow center"><h2 class="scr-title">ONLINE BATTLE</h2>
-      <p class="online-note">Both players open this game from the same server address. One creates a room, the other joins with its code.</p>
+      <p class="online-note">Both players open this game (any address — local or the hosted site). One creates a room, the other joins with its 4-letter code.</p>
       <div class="set-list">
         <button class="nav set-row" data-a="create"><span>Create Room</span><b>Host</b></button>
         <div class="set-row join-row"><input class="room-in" maxlength="4" placeholder="CODE" autocomplete="off" spellcheck="false"><button class="nav join-btn" data-a="join">Join Room</button></div>
@@ -191,7 +191,7 @@ const UI = {
           if (code.length !== 4) { this.onlineStatus('Enter the 4-letter room code first.', true); input.focus(); return; }
           this.onlineStatus(`Joining ${code}…`); await Net.join(code);
         }
-      } catch (e) { this.onlineStatus('Could not reach the game server. Start it with <code>python3 serve.py</code>.', true); }
+      } catch (e) { this.onlineStatus(e.message || 'Could not connect.', true); }
     };
     s.querySelectorAll('[data-a]').forEach(b => { b.onclick = () => act(b.dataset.a); });
     this.show('online', { back: () => { Net.close(); this.openMenu(1); } });
