@@ -240,6 +240,13 @@ const FX = {
       this.add({ type: 'blood', x, y, vx: dir * U.rand(1, power) + U.rand(-2.5, 2.5), vy: U.rand(-power, power * 0.2), life: l, size: U.rand(1.8, 4), grav: 0.42, drag: 0.98 });
     }
   },
+  clovers(x, y, n = 10, spread = 6) {
+    n = this.n(n);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * 6.283, sp = U.rand(1, spread), l = U.rand(40, 70);
+      this.add({ type: 'clover', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 2, life: l, size: U.rand(4, 8), color: U.pick(['#3fbf4a', '#5fd65a', '#8be07a']), grav: 0.06, drag: 0.96, rot: Math.random() * 6, vr: U.rand(-0.15, 0.15) });
+    }
+  },
   banner(title, sub, color = '#fff', life = 110) { World.banner = { title, sub, color, life, max: life }; },
 };
 
@@ -342,6 +349,21 @@ function drawParticles(ctx) {
         else ctx.arc(p.x, p.y, p.size, 0, 6.283);
         ctx.fill();
         break;
+      case 'clover': {
+        // four-leaf clover: four round leaves around a centre, with a little stem
+        ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = Math.min(1, a * 2);
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot || 0);
+        const r = p.size;
+        ctx.fillStyle = p.color; ctx.strokeStyle = '#0e3a12'; ctx.lineWidth = 1;
+        for (let i = 0; i < 4; i++) {
+          const an = i * Math.PI / 2;
+          ctx.beginPath(); ctx.arc(Math.cos(an) * r * 0.7, Math.sin(an) * r * 0.7, r * 0.62, 0, 6.283); ctx.fill(); ctx.stroke();
+        }
+        ctx.strokeStyle = '#2f7a2a'; ctx.lineWidth = r * 0.25;
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(r * 0.4, r * 1.2, r * 0.1, r * 1.8); ctx.stroke();
+        ctx.restore();
+        break;
+      }
       case 'ghost':
         ctx.globalCompositeOperation = 'source-over';
         drawStickman(ctx, p.def, p.pose, p.x, p.y, p.facing, { alpha: a * 0.35, tint: p.color });
@@ -568,17 +590,24 @@ class Fighter {
   isFree() { return this.state === 'idle' || this.state === 'walk' || this.state === 'air' || this.state === 'block'; }
   setState(s) { this.state = s; this.stateT = 0; }
   summonMult() { return this.def.summonMult || 1; }
-  slowFactor() { const d = World.domain; return d && d.slowOpp && d.owner !== this ? 0.55 : 1; }
+  slowFactor() {
+    const d = World.domain;
+    let k = d && d.slowOpp && d.owner !== this ? 0.55 : 1;
+    if (this.buffs.mud) k *= 0.6;   // mired in a Mire Wraith's mud
+    return k;
+  }
   damageMult(h) {
     let m = 1;
     if (this.def.dmgMult) m *= this.def.dmgMult(this, h);
     if (this.buffs.rika) m *= 1.2;
+    if (this.buffs.jackpot) m *= 1.35;
     if (this.buffs.redscale) m *= 1.15;
     return m;
   }
   ceRegenRate() {
     let r = 5.5 * (this.def.ceRegen || 1);
     if (this.buffs.regen) r *= 2;
+    if (this.buffs.jackpot) r *= 3;
     return r / 60;
   }
   gainCe(n) { if (!this.def.noCE) this.ce = Math.min(100, this.ce + n); }
@@ -670,7 +699,7 @@ class Fighter {
       if (p.up && this.y < FLOOR - 1) { this.dropT = 14; this.onGround = false; this.state = 'air'; return; }
       this.state = 'block'; this.vx *= 0.6; return;
     }
-    const dir = (h.right ? 1 : 0) - (h.left ? 1 : 0), sp = this.speed * slow * (this.buffs.redscale ? 1.15 : 1);
+    const dir = (h.right ? 1 : 0) - (h.left ? 1 : 0), sp = this.speed * slow * (this.buffs.redscale ? 1.15 : 1) * (this.buffs.jackpot ? 1.2 : 1);
     if (this.onGround) this.vx = U.lerp(this.vx, dir * sp, 0.3);
     else this.vx = U.clamp(this.vx + dir * 0.6, -sp * 1.15, sp * 1.15);
     if (p.up && this.jumps < 2) {

@@ -237,6 +237,149 @@ const ARENAS = [
       }
     },
   },
+  {
+    id: 'bamboo', name: 'Bamboo Monastery', sub: 'Misty Mountain Temple', platforms: [{ x: 140, y: 460, w: 230 }, { x: 910, y: 460, w: 230 }],
+    draw(c) {
+      const sky = c.createLinearGradient(0, 0, 0, FLOOR);
+      sky.addColorStop(0, '#9fc4b0'); sky.addColorStop(0.6, '#d8e8d0'); sky.addColorStop(1, '#eef4e4');
+      c.fillStyle = sky; c.fillRect(0, 0, W, H);
+      const r = seeded(21);
+      // layered misty mountains
+      for (const [col, base, amp] of [['#8aa898', 300, 110], ['#6f907e', 380, 80]]) {
+        c.fillStyle = col; c.beginPath(); c.moveTo(0, FLOOR);
+        for (let x = 0; x <= W; x += 30) c.lineTo(x, base - Math.abs(Math.sin(x * 0.005 + base)) * amp - r() * 18);
+        c.lineTo(W, FLOOR); c.fill();
+      }
+      // temple on the slope
+      c.fillStyle = '#5a3a2a'; c.fillRect(540, 360, 200, 120);
+      roof(c, 640, 300, 200, 70, '#2a1a14'); roof(c, 640, 250, 140, 50, '#2a1a14');
+      c.fillStyle = 'rgba(255,220,150,0.6)'; c.fillRect(600, 400, 80, 50);
+      // bamboo stalks in front
+      for (let layer = 0; layer < 2; layer++) for (let i = 0; i < 22; i++) {
+        const x = (i * 61 + layer * 31 + r() * 20) % (W + 30) - 15, w = layer ? 13 : 8;
+        if (x > 500 && x < 780 && !layer) continue;
+        c.fillStyle = layer ? '#4f8f3a' : '#7fae5a'; c.fillRect(x, layer ? 80 : 160, w, FLOOR);
+        c.fillStyle = 'rgba(0,0,0,0.2)'; for (let y = 200 + (i * 13) % 70; y < FLOOR; y += 85) c.fillRect(x, y, w, 3);
+        c.fillStyle = layer ? '#3f7a2a' : '#6f9e4a';
+        for (let k = 0; k < 3; k++) { c.beginPath(); c.ellipse(x + w / 2 + 14, (layer ? 90 : 170) + k * 24, 16, 4, -0.5, 0, 6.283); c.fill(); }
+      }
+      drawGround(c, '#8a7a5a', '#4a3a28', '#a89a78');
+      c.fillStyle = 'rgba(0,0,0,0.12)'; for (let x = 20; x < W; x += 120) c.fillRect(x, FLOOR + 30, 70, 6);
+      drawPlatforms(c, this.platforms, '#7a5a3a', '#4a3020');
+    },
+    fx(c, t) {
+      c.fillStyle = 'rgba(255,255,255,0.18)';
+      for (let i = 0; i < 4; i++) { c.beginPath(); c.ellipse((i * 380 + t * 0.4) % (W + 400) - 200, 420 + i * 30, 260, 26, 0, 0, 6.283); c.fill(); }
+      c.fillStyle = 'rgba(120,170,80,0.8)';
+      for (let i = 0; i < 10; i++) { const x = (i * 131 + t * 0.7) % W, y = (i * 71 + t * 0.9) % FLOOR; c.beginPath(); c.ellipse(x, y, 5, 2, t * 0.03 + i, 0, 6.283); c.fill(); }
+    },
+  },
+  {
+    id: 'casino', name: 'High Roller Casino', sub: 'Underground Gambling Den', platforms: [{ x: 500, y: 470, w: 280 }],
+    draw(c) {
+      c.fillStyle = '#0c0812'; c.fillRect(0, 0, W, H);
+      const r = seeded(77);
+      // ceiling lights
+      for (let i = 0; i < 10; i++) { const g = c.createRadialGradient(64 + i * 128, 40, 4, 64 + i * 128, 40, 120); g.addColorStop(0, 'rgba(255,210,120,0.5)'); g.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = g; c.fillRect(i * 128 - 60, 0, 250, 200); }
+      // big roulette sign
+      c.strokeStyle = '#c9a23a'; c.lineWidth = 8; c.beginPath(); c.arc(640, 210, 110, 0, 6.283); c.stroke();
+      for (let i = 0; i < 16; i++) { c.fillStyle = i === 0 ? '#2f9a3a' : i % 2 ? '#a01828' : '#141414'; c.beginPath(); c.moveTo(640, 210); c.arc(640, 210, 100, i / 16 * 6.283, (i + 1) / 16 * 6.283); c.closePath(); c.fill(); }
+      c.fillStyle = '#c9a23a'; c.beginPath(); c.arc(640, 210, 22, 0, 6.283); c.fill();
+      c.font = '900 34px Impact, sans-serif'; c.textAlign = 'center'; c.fillStyle = '#ffd34d'; c.fillText('★ JACKPOT ★', 640, 362);
+      // rows of slot machines
+      for (const side of [0, 1]) for (let i = 0; i < 4; i++) {
+        const x = side ? W - 110 - i * 120 : 30 + i * 120, y = 410;
+        c.fillStyle = '#3a2a4a'; c.fillRect(x, y, 90, 210); c.strokeStyle = '#c9a23a'; c.lineWidth = 3; c.strokeRect(x, y, 90, 210);
+        c.fillStyle = '#f8f4ea'; c.fillRect(x + 10, y + 40, 70, 34);
+        c.font = '900 20px sans-serif'; c.textAlign = 'center';
+        ['7', '♣', '♦'].forEach((sym, k) => { c.fillStyle = sym === '♣' ? '#2f9a3a' : '#c4122f'; c.fillText(r() < 0.5 ? sym : '7', x + 22 + k * 23, y + 65); });
+        c.fillStyle = r() < 0.5 ? '#ff4d8a' : '#4dc8ff'; c.fillRect(x + 10, y + 10, 70, 18);
+      }
+      drawGround(c, '#5a1420', '#24060c', '#c9a23a');
+      c.fillStyle = 'rgba(201,162,58,0.25)'; for (let x = 0; x < W; x += 60) { c.beginPath(); c.moveTo(x, FLOOR + 10); c.lineTo(x + 30, FLOOR + 50); c.lineTo(x, FLOOR + 90); c.lineTo(x - 30, FLOOR + 50); c.closePath(); c.fill(); }
+      drawPlatforms(c, this.platforms, '#2f6a2a', '#1a3a18');
+    },
+    fx(c, t) {
+      for (let i = 0; i < 8; i++) {
+        const side = i < 4, x = side ? 40 + i * 120 : W - 100 - (i - 4) * 120;
+        c.fillStyle = Math.sin(t * 0.15 + i * 1.7) > 0 ? 'rgba(255,77,138,0.35)' : 'rgba(77,200,255,0.35)';
+        c.fillRect(x, 420, 70, 18);
+      }
+    },
+  },
+  {
+    id: 'court', name: 'Hall of Judgment', sub: 'Supreme Courthouse', platforms: [{ x: 150, y: 455, w: 220 }, { x: 910, y: 455, w: 220 }],
+    draw(c) {
+      const g = c.createLinearGradient(0, 0, 0, FLOOR);
+      g.addColorStop(0, '#3a3428'); g.addColorStop(1, '#8a7e62');
+      c.fillStyle = g; c.fillRect(0, 0, W, H);
+      // marble columns
+      for (let i = 0; i < 7; i++) {
+        const x = 70 + i * 190;
+        c.fillStyle = '#d8d0bc'; c.fillRect(x, 90, 54, FLOOR - 90);
+        c.fillStyle = 'rgba(0,0,0,0.12)'; for (let k = 0; k < 4; k++) c.fillRect(x + 8 + k * 12, 100, 3, FLOOR - 110);
+        c.fillStyle = '#c8bfa8'; c.fillRect(x - 10, 80, 74, 16); c.fillRect(x - 10, FLOOR - 20, 74, 20);
+      }
+      c.fillStyle = '#5a4e38'; c.fillRect(0, 50, W, 34);
+      // judge's bench and the balance emblem above it
+      c.fillStyle = '#4a2e1a'; c.fillRect(470, 420, 340, 200); c.fillStyle = '#5a3a22'; c.fillRect(460, 410, 360, 22);
+      c.strokeStyle = '#c9a23a'; c.lineWidth = 6;
+      c.beginPath(); c.moveTo(640, 150); c.lineTo(640, 330); c.moveTo(540, 190); c.lineTo(740, 190); c.stroke();
+      c.lineWidth = 2;
+      for (const sx of [540, 740]) { c.beginPath(); c.moveTo(sx, 190); c.lineTo(sx - 30, 260); c.moveTo(sx, 190); c.lineTo(sx + 30, 260); c.stroke(); c.beginPath(); c.ellipse(sx, 262, 34, 8, 0, 0, Math.PI); c.fillStyle = 'rgba(201,162,58,0.6)'; c.fill(); c.stroke(); }
+      // checkered marble floor
+      c.fillStyle = '#e8e0cc'; c.fillRect(0, FLOOR, W, H - FLOOR);
+      c.fillStyle = '#3a342a'; for (let y = FLOOR; y < H; y += 25) for (let x = ((y - FLOOR) / 25) % 2 ? 0 : 50; x < W; x += 100) c.fillRect(x, y, 50, 25);
+      c.fillStyle = '#c9a23a'; c.fillRect(0, FLOOR, W, 3);
+      drawPlatforms(c, this.platforms, '#6a4a2e', '#3a2414');
+    },
+    fx(c, t) {
+      c.fillStyle = 'rgba(255,240,200,0.06)';
+      for (let i = 0; i < 3; i++) { c.beginPath(); c.moveTo(200 + i * 400, 0); c.lineTo(300 + i * 400 + Math.sin(t * 0.01) * 20, FLOOR); c.lineTo(180 + i * 400, FLOOR); c.closePath(); c.fill(); }
+    },
+  },
+  {
+    id: 'festival', name: 'Night Festival', sub: 'Summer Lantern Street', platforms: [],
+    draw(c) {
+      const sky = c.createLinearGradient(0, 0, 0, FLOOR);
+      sky.addColorStop(0, '#0a0a24'); sky.addColorStop(1, '#3a1a4a');
+      c.fillStyle = sky; c.fillRect(0, 0, W, H);
+      const r = seeded(5);
+      c.fillStyle = '#fff'; for (let i = 0; i < 60; i++) c.fillRect(r() * W, r() * 300, 1.5, 1.5);
+      // festival stalls
+      const stalls = ['#c4122f', '#2a6aaa', '#c4122f', '#2a8a4a', '#c4122f', '#aa6a2a'];
+      stalls.forEach((col, i) => {
+        const x = 20 + i * 215;
+        c.fillStyle = '#2a1a14'; c.fillRect(x, 430, 190, 190);
+        c.fillStyle = col; c.fillRect(x - 6, 400, 202, 38);
+        c.fillStyle = '#f8f4ea'; for (let k = 0; k < 6; k++) c.fillRect(x - 6 + k * 34 + 8, 400, 16, 38);
+        c.fillStyle = 'rgba(255,200,120,0.55)'; c.fillRect(x + 12, 470, 166, 60);
+      });
+      // strings of lanterns
+      c.strokeStyle = '#2a1a14'; c.lineWidth = 2;
+      for (const y0 of [150, 260]) {
+        c.beginPath(); c.moveTo(0, y0); for (let x = 0; x <= W; x += 40) c.lineTo(x, y0 + Math.sin(x / W * Math.PI * 3) * 26); c.stroke();
+        for (let x = 30; x < W; x += 70) {
+          const y = y0 + Math.sin(x / W * Math.PI * 3) * 26 + 14;
+          const lg = c.createRadialGradient(x, y, 2, x, y, 30); lg.addColorStop(0, 'rgba(255,200,120,0.6)'); lg.addColorStop(1, 'rgba(0,0,0,0)');
+          c.fillStyle = lg; c.fillRect(x - 30, y - 30, 60, 60);
+          c.fillStyle = (x / 70) % 2 < 1 ? '#ff6a3a' : '#ffb03a'; c.beginPath(); c.ellipse(x, y, 10, 13, 0, 0, 6.283); c.fill();
+          c.fillStyle = '#2a1a14'; c.fillRect(x - 5, y - 15, 10, 3); c.fillRect(x - 5, y + 12, 10, 3);
+        }
+      }
+      drawGround(c, '#4a3a3a', '#1a1214', '#6a5a5a');
+      c.fillStyle = 'rgba(255,200,120,0.08)'; for (let x = 0; x < W; x += 140) c.fillRect(x, FLOOR + 6, 90, 4);
+    },
+    fx(c, t) {
+      // occasional fireworks over the street
+      const ph = t % 180;
+      if (ph < 50) {
+        const fx = 200 + ((Math.floor(t / 180) * 397) % 880), fy = 110, rr = ph * 2.2;
+        c.strokeStyle = `rgba(${Math.floor(t / 180) % 2 ? '255,120,200' : '120,220,255'},${1 - ph / 50})`; c.lineWidth = 2;
+        for (let i = 0; i < 14; i++) { const a = i / 14 * 6.283; c.beginPath(); c.moveTo(fx + Math.cos(a) * rr * 0.6, fy + Math.sin(a) * rr * 0.6); c.lineTo(fx + Math.cos(a) * rr, fy + Math.sin(a) * rr); c.stroke(); }
+      }
+    },
+  },
 ];
 
 const bgCache = new Map();

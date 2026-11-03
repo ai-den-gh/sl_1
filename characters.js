@@ -1870,7 +1870,20 @@ const CURSE_G4 = {
     eyeDots(g, [[hx + 6, hy - 3, 7, '#f5f0e0', '#c4122f']]);
     if (!g.o.white && !g.o.tint) { ctx.strokeStyle = '#1a0f22'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(hx - 2, hy + 9); for (let i = 0; i < 5; i++) ctx.lineTo(hx + i * 4, hy + (i % 2 ? 12 : 8)); ctx.stroke(); }
   },
-  abilities: [{ name: 'Lunge Bite', icon: '噛', color: '#b06bff', cost: 15, cd: 200, ai: { min: 60, max: 220 }, desc: 'Leaps forward with gnashing teeth.', move: lungeMove({ dmg: 40 }) }, null, null, null],
+  abilities: [
+    { name: 'Lunge Bite', icon: '噛', color: '#b06bff', cost: 15, cd: 200, ai: { min: 60, max: 220 }, desc: 'Leaps forward with gnashing teeth.', move: lungeMove({ dmg: 40 }) },
+    { name: 'Gnash Flurry', icon: '咬', color: '#b06bff', cost: 15, cd: 180, ai: { min: 0, max: 100 }, desc: 'A frenzy of rapid bites up close.',
+      move: { id: 'gnash', kind: 'special', startup: 6, active: 24, recovery: 14, hitEvery: 6, poses: ['jabW', 'jab'], sfx: 'bite',
+        hitbox: { x: 4, y: -110, w: 62, h: 50 }, hit: { dmg: 12, kb: 1, stun: 16, fx: 'slash', color: '#b06bff', noScale: true, hitstop: 1 } } },
+    { name: 'Screech', icon: '叫', color: '#ff9ad0', cost: 20, cd: 300, ai: { min: 0, max: 180 }, desc: 'A piercing shriek that briefly stuns anyone nearby.',
+      move: { id: 'screech', kind: 'special', startup: 12, active: 1, recovery: 20, poses: ['castW', 'cast'],
+        onFrame(f, fr, t) {
+          if (fr !== 12) return;
+          Sound.play('roar'); for (let i = 0; i < 2; i++) FX.ring(f.x, f.y - 110, '#ff9ad0', 120 + i * 60, 18, 3);
+          for (const v of World.enemies(f)) if (near(v, f.x, f.midY, 190, 180)) Combat.hit(f, v, { dmg: 15, stunAdd: 35, kb: 3, x: v.x, y: v.midY, dir: dirTo(f, v) });
+        } } },
+    null,
+  ],
 };
 
 const CURSE_G3 = {
@@ -1889,7 +1902,19 @@ const CURSE_G3 = {
   abilities: [
     { name: 'Acid Spit', icon: '酸', color: '#9be05a', cost: 15, cd: 150, ai: { min: 160, max: 650 }, desc: 'Lobs a glob of corrosive cursed fluid.', move: spitMove() },
     { name: 'Pounce', icon: '跳', color: '#b06bff', cost: 15, cd: 200, ai: { min: 60, max: 230 }, desc: 'A fast leaping strike.', move: lungeMove({ dmg: 48 }) },
-    null, null,
+    { name: 'Horn Charge', icon: '角', color: '#d9d0b0', cost: 20, cd: 240, ai: { min: 80, max: 360 }, desc: 'Lowers its horns and charges across the ground, goring whoever it hits.',
+      move: { id: 'horn', kind: 'special', startup: 10, active: 16, recovery: 16, keepVel: true, poses: ['heavyW', 'dash'], sfx: 'roar',
+        hitbox: { x: 0, y: -120, w: 70, h: 80 }, hit: { dmg: 55, kb: 12, kby: -8, launch: true, hitstop: 7, color: '#d9d0b0' },
+        onFrame(f, fr) { if (fr >= 10 && fr < 26) { f.vx = f.facing * 14; if (fr % 3 === 0) FX.dust(f.x, f.y, 2); } if (fr === 26) f.vx *= 0.2; } } },
+    { name: 'Eye Beam', icon: '眼', color: '#ffe36a', cost: 25, cd: 300, ai: { min: 150, max: 900 }, desc: 'All its eyes fire at once: a thin, fast beam across the arena.',
+      move: { id: 'eyebeam', kind: 'special', startup: 16, active: 1, recovery: 18, poses: ['castW', 'cast'],
+        onFrame(f, fr) {
+          if (fr !== 16) return;
+          Sound.play('zap');
+          spawnProj(f, { x: f.x + f.facing * 20, y: f.y - 130, vx: f.facing * 30, r: 12, life: 45,
+            hits: { dmg: 45, kb: 5, stun: 20, fx: 'zap', sfx: 'zap', hitstop: 4 },
+            render(ctx, e) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = '#ffe36a'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(e.x - e.vx * 3, e.y); ctx.lineTo(e.x, e.y); ctx.stroke(); ctx.restore(); } });
+        } } },
   ],
 };
 
@@ -1937,7 +1962,14 @@ const FINGER_BEARER = {
       },
     },
     { name: 'Bile Spray', icon: '酸', color: '#9be05a', cost: 20, cd: 220, ai: { min: 150, max: 600 }, desc: 'Sprays three globs of corrosive fluid.', move: spitMove({ count: 3, dmg: 32 }) },
-    null,
+    { name: 'Gorge', icon: '喰', color: '#c96bff', cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 1280 }, desc: 'ULTIMATE. Devours its own cursed energy in a feeding frenzy: heals 200 and becomes faster and stronger for 10 seconds.',
+      move: { id: 'gorge', kind: 'ult', startup: 30, active: 1, recovery: 14, poses: ['heavyW', 'win'],
+        onStart(f) { f.invuln = 40; FX.banner('ULTIMATE', 'GORGE', '#c96bff', 100); Sound.play('roar'); },
+        onFrame(f, fr) {
+          if (fr !== 30) return;
+          f.hp = Math.min(f.maxHp, f.hp + 200); f.buffs.redscale = 600;
+          FX.shake(14); FX.ring(f.x, f.y - 100, '#c96bff', 160, 24, 6); FX.text(f.x, f.y - 230, '+200', '#9be05a', 28, 60);
+        } } },
   ],
 };
 
@@ -2926,11 +2958,550 @@ const BAO = {
   ],
 };
 
+/* ---------------------------------------------------------------- DAIGO KUJI (original) */
+
+const REEL_SYMS = ['7', '♦', '★', '♠', '♣'];
+
+// Every technique spins three reels. Three clovers = JACKPOT, two of a kind = a lucky boost.
+// Misses build up "luck", making the next jackpot more likely.
+function spinReels(f, bonus = 0) {
+  const pJack = Math.min(0.6, 0.12 + (f.luck || 0) + bonus), pPair = 0.35;
+  const r = Math.random();
+  let res, syms;
+  if (r < pJack) { res = 'jackpot'; syms = ['♣', '♣', '♣']; }
+  else if (r < pJack + pPair) {
+    res = 'pair';
+    const a = U.pick(REEL_SYMS.slice(0, 4)), b = U.pick(REEL_SYMS.filter(x => x !== a && x !== '♣'));
+    syms = U.pick([[a, a, b], [a, b, a], [b, a, a]]);
+  } else {
+    res = 'miss';
+    const pool = REEL_SYMS.slice(); syms = [];
+    for (let i = 0; i < 3; i++) syms.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  }
+  f.reels = { syms, t: 70, res };
+  if (res === 'jackpot') { f.luck = 0; triggerJackpot(f); }
+  else { f.luck = Math.min(0.4, (f.luck || 0) + (res === 'miss' ? 0.06 : 0.02)); Sound.play(res === 'pair' ? 'confirm' : 'tick'); }
+  return res;
+}
+
+function triggerJackpot(f) {
+  f.buffs.jackpot = 420;
+  f.gainCe(30);
+  FX.clovers(f.x, f.y - 90, 40, 10);
+  FX.ring(f.x, f.y - 90, '#5fd65a', 150, 26, 6);
+  FX.text(f.x, f.y - 220, 'JACKPOT!', '#ffd34d', 44, 90);
+  FX.flash('#5fd65a', 0.3); FX.shake(10);
+  Sound.play('bf'); Sound.play('heal');
+}
+
+function drawRouletteBg(ctx, d, a) {
+  ctx.save(); ctx.globalAlpha = a;
+  const g = ctx.createRadialGradient(W / 2, 300, 60, W / 2, 300, 800);
+  g.addColorStop(0, '#2a5a2a'); g.addColorStop(1, '#0a1a0a');
+  ctx.fillStyle = g; ctx.fillRect(-30, -30, W + 60, H + 60);
+  // a giant roulette wheel behind the fighters
+  const cx = W / 2, cy = 300, R = 250, spin = d.age * 0.03 + (d.spinOff || 0);
+  for (let i = 0; i < 18; i++) {
+    const a0 = spin + i / 18 * 6.283, a1 = a0 + 6.283 / 18;
+    ctx.fillStyle = i === 0 ? '#2f9a3a' : i % 2 ? '#a01828' : '#141414';
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, a0, a1); ctx.closePath(); ctx.fill();
+  }
+  ctx.strokeStyle = '#c9a23a'; ctx.lineWidth = 10; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.283); ctx.stroke();
+  ctx.fillStyle = '#c9a23a'; ctx.beginPath(); ctx.arc(cx, cy, 40, 0, 6.283); ctx.fill();
+  // bouncing ball
+  const ba = -d.age * 0.11;
+  ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(cx + Math.cos(ba) * (R - 22), cy + Math.sin(ba) * (R - 22), 10, 0, 6.283); ctx.fill();
+  // felt floor
+  ctx.fillStyle = '#123a16'; ctx.fillRect(-30, FLOOR, W + 60, H - FLOOR + 30);
+  ctx.strokeStyle = 'rgba(201,162,58,0.4)'; ctx.lineWidth = 2;
+  for (let x = 0; x < W; x += 100) { ctx.beginPath(); ctx.moveTo(x, FLOOR); ctx.lineTo(x - 40, H); ctx.stroke(); }
+  ctx.restore();
+}
+
+const DAIGO = {
+  id: 'daigo', name: 'Daigo Kuji', short: 'DAIGO', title: 'The High Roller', kanji: '久慈大吾', color: '#ffd34d',
+  style: 'A luck-driven brawler: every technique spins the reels, and a jackpot turns him into a clover-soaked powerhouse.',
+  bio: 'A back-alley gambler whose technique literally runs on luck. He has never once folded a hand, and he swears the clovers are real.',
+  passive: { name: 'Lady Luck', desc: 'Every technique spins three reels. Two of a kind powers it up; three clovers is a JACKPOT — a 7-second Lucky Streak with +35% damage, +20% speed, triple cursed-energy regen and clovers bursting from every hit. Each miss makes the next jackpot more likely.' },
+  hp: 1050, speed: 1.02, shoulderW: 17, hipW: 12,
+  melee: { power: 1.1, reach: 6 },
+  look: { skin: '#f0d0b4', top: '#5a4632', pants: '#2a2a34', accent: '#ffd34d', eye: '#2a1a10' },
+  aiStyle: { pref: 140 },
+  onDealHit(f, t) { if (f.buffs.jackpot) FX.clovers(t.x, t.midY, 6, 6); },
+  passiveTick(f) {
+    if (f.reels && f.reels.t > 0) f.reels.t--;
+    if (f.buffs.jackpot && f.anim % 4 === 0) {
+      const a = f.anim * 0.15;
+      FX.add({ type: 'clover', x: f.x + Math.cos(a) * 34, y: f.y - 70 * f.scale + Math.sin(a) * 50, vx: 0, vy: -1.2, life: 30, size: 5, color: U.pick(['#3fbf4a', '#5fd65a', '#8be07a']), drag: 0.97, rot: a, vr: 0.1 });
+    }
+  },
+  // slot reels above his head after each spin
+  drawAura(ctx, f) {
+    const R = f.reels;
+    if (!R || R.t <= 0 || f.state === 'ko') return;
+    const h = headPos(f), y = h.y - 72 * f.scale, spinning = R.t > 52;
+    ctx.save(); ctx.globalAlpha = Math.min(1, R.t / 10);
+    ctx.fillStyle = 'rgba(10,8,4,0.85)'; ctx.strokeStyle = R.res === 'jackpot' && !spinning ? '#5fd65a' : '#c9a23a'; ctx.lineWidth = 2;
+    ctx.fillRect(h.x - 42, y - 16, 84, 30); ctx.strokeRect(h.x - 42, y - 16, 84, 30);
+    ctx.font = '900 18px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let i = 0; i < 3; i++) {
+      const stopped = R.t <= 52 + (2 - i) * 6;
+      const sym = stopped ? R.syms[i] : REEL_SYMS[(f.anim + i * 2) % REEL_SYMS.length];
+      ctx.fillStyle = sym === '♣' ? '#5fd65a' : sym === '7' ? '#ffd34d' : sym === '♦' ? '#ff4d5a' : '#ffffff';
+      ctx.fillText(sym, h.x - 26 + i * 26, y);
+    }
+    ctx.restore();
+  },
+  drawHair(g, hx, hy, r) {
+    const { ctx, o } = g;
+    // messy yellow hair swept up and back
+    drawSpikyHair(g, hx, hy, r, [[-65, 6, 13], [-38, 11, 12], [-12, 13, 12], [14, 12, 12], [40, 10, 12], [68, 8, 12], [98, 5, 12]], '#f2c832');
+    if (o.white || o.tint) return;
+    // a slight mustache
+    ctx.strokeStyle = '#a07a20'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(hx + 6, hy + 7); ctx.quadraticCurveTo(hx + 10, hy + 9, hx + 14, hy + 7); ctx.stroke();
+  },
+  drawTorso(g) {
+    const { ctx, sk, col, OL } = g;
+    // thick fur collar on the heavy jacket, and a zip down the front
+    ctx.fillStyle = col('#d8c8a8'); ctx.strokeStyle = OL; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(sk.sh[0], sk.sh[1] + 3, 15, 7, sk.td[0] * 0.4, 0, 6.283); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = col('#2a2016'); ctx.lineWidth = 2;
+    lineTo2(ctx, [sk.sh[0] * 0.9 + 3, sk.sh[1] * 0.9 + 6], [3, -2]);
+  },
+  abilities: [
+    {
+      name: 'Card Toss', icon: '札', color: '#f8f4ea', cost: 12, cd: 110, ai: { min: 140, max: 750 },
+      desc: 'Flicks razor-edged playing cards. Normally three; two of a kind throws five; a jackpot throws seven.',
+      move: {
+        id: 'cards', kind: 'special', startup: 10, active: 1, recovery: 14, poses: ['castW', 'cast'],
+        onFrame(f, fr) {
+          if (fr !== 10) return;
+          const res = spinReels(f), n = res === 'jackpot' ? 7 : res === 'pair' ? 5 : 3;
+          Sound.play('swish');
+          for (let i = 0; i < n; i++) {
+            const a = (i - (n - 1) / 2) * 0.07;
+            spawnProj(f, {
+              x: f.x + f.facing * 30, y: f.y - 110, vx: f.facing * Math.cos(a) * 18, vy: Math.sin(a) * 18, r: 10, life: 60, clash: 1, suit: U.pick(['♦', '♣', '♥', '♠']),
+              hits: { dmg: 18, kb: 2, stun: 12, fx: 'slash', color: '#f8f4ea', hitstop: 1 },
+              render(ctx, e) {
+                ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.age * 0.5);
+                ctx.fillStyle = '#f8f4ea'; ctx.strokeStyle = '#16161c'; ctx.lineWidth = 1.5;
+                ctx.fillRect(-7, -10, 14, 20); ctx.strokeRect(-7, -10, 14, 20);
+                ctx.fillStyle = e.suit === '♦' || e.suit === '♥' ? '#c4122f' : '#16161c'; ctx.font = '900 10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(e.suit, 0, 1);
+                ctx.restore();
+              },
+            });
+          }
+        },
+      },
+    },
+    {
+      name: 'Loaded Dice', icon: '賽', color: '#ffffff', cost: 20, cd: 200, ai: { min: 100, max: 600 },
+      desc: 'Rolls two giant dice that bounce toward the opponent and explode for 6 damage per pip. Two of a kind loads them toward high numbers; a jackpot rolls double sixes.',
+      move: {
+        id: 'dice', kind: 'special', startup: 12, active: 1, recovery: 16, poses: ['castW', 'cast'],
+        onFrame(f, fr) {
+          if (fr !== 12) return;
+          const res = spinReels(f);
+          Sound.play('whoosh');
+          for (let i = 0; i < 2; i++) {
+            const pip = res === 'jackpot' ? 6 : res === 'pair' ? U.randInt(4, 6) : U.randInt(1, 6);
+            spawnProj(f, {
+              x: f.x + f.facing * 30, y: f.y - 120, vx: f.facing * (8 + i * 2.5), vy: -7 - i, r: 18, life: 120, clash: 2, pip, spin: 0,
+              hits: { dmg: pip * 6, kb: 6, kby: -6, launch: pip >= 5, fx: pip === 6 ? 'red' : null, color: '#ffd34d', hitstop: 4 + pip },
+              tick(e) {
+                e.vy += 0.5; e.spin += e.vx * 0.04;
+                if (e.y > FLOOR - 18) { e.y = FLOOR - 18; e.vy = -Math.abs(e.vy) * 0.55; e.vx *= 0.85; if (Math.abs(e.vy) < 2) e.kill('stop'); else Sound.play('tick'); }
+              },
+              onEnd(e) {
+                FX.explosion(e.x, e.y, 20 + e.pip * 8, ['#ffffff', '#ffd34d', '#ff9a2a']);
+                FX.text(e.x, e.y - 40, String(e.pip), '#ffd34d', 26, 40);
+                if (e.pip === 6) FX.clovers(e.x, e.y, 6, 5);
+              },
+              render(ctx, e) {
+                ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.spin);
+                ctx.fillStyle = '#f8f4ea'; ctx.strokeStyle = '#16161c'; ctx.lineWidth = 2.5;
+                ctx.fillRect(-16, -16, 32, 32); ctx.strokeRect(-16, -16, 32, 32);
+                ctx.fillStyle = e.pip === 1 ? '#c4122f' : '#16161c';
+                const P = { 1: [[0, 0]], 2: [[-7, -7], [7, 7]], 3: [[-8, -8], [0, 0], [8, 8]], 4: [[-7, -7], [7, -7], [-7, 7], [7, 7]], 5: [[-8, -8], [8, -8], [0, 0], [-8, 8], [8, 8]], 6: [[-7, -9], [7, -9], [-7, 0], [7, 0], [-7, 9], [7, 9]] }[e.pip];
+                for (const [x, y] of P) { ctx.beginPath(); ctx.arc(x, y, 3, 0, 6.283); ctx.fill(); }
+                ctx.restore();
+              },
+            });
+          }
+        },
+      },
+    },
+    {
+      name: 'Double or Nothing', icon: '倍', color: '#ff9a2a', cost: 22, cd: 220, ai: { min: 0, max: 120 },
+      desc: 'An all-in haymaker. On a miss it\'s a coin flip between a crushing double-damage blow and a harmless whiff; two of a kind or a jackpot always pays out double.',
+      move: {
+        id: 'double', kind: 'special', startup: 14, active: 4, recovery: 22, lunge: 9, poses: ['heavyW', 'heavy'],
+        hitbox: { x: 4, y: -128, w: 78, h: 46 },
+        onStart(f) { const res = spinReels(f); f.mvars.win = res !== 'miss' || Math.random() < 0.5; },
+        hitFn(f) {
+          return f.mvars.win
+            ? { dmg: 150, kb: 16, kby: -12, launch: true, hitstop: 14, shake: 14, sfx: 'boom', color: '#ffd34d' }
+            : { dmg: 0, kb: 1, stun: 4, quiet: true, sfx: 'tick' };
+        },
+        onHit(f, t) {
+          if (f.mvars.win) { FX.text(t.x, t.y - 190, 'DOUBLE!', '#ffd34d', 34, 60); FX.clovers(t.x, t.midY, 12, 7); }
+          else FX.text(t.x, t.y - 190, '...nothing', '#9aa0b0', 22, 50);
+        },
+      },
+    },
+    {
+      name: 'Roulette Royale', icon: '賭', color: '#2f9a3a', cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 1280 },
+      desc: 'DOMAIN EXPANSION. A colossal roulette wheel spins behind the fight. Every couple of seconds the ball lands — RED: the opponent is struck by fire; BLACK: the opponent is frozen; GREEN: JACKPOT for Daigo, plus 120 health.',
+      move: {
+        id: 'roulette', kind: 'ult', startup: 60, active: 0, recovery: 0, poses: ['sign', 'sign'],
+        onStart(f) { f.invuln = 70; domainCutscene(f, 'cards', 'ROULETTE ROYALE'); FX.banner('DOMAIN EXPANSION', 'ROULETTE ROYALE', '#5fd65a', 130); FX.slow(40, 0.35); Sound.play('charge'); },
+        onFrame(f, fr) {
+          f.invuln = Math.max(f.invuln, 2);
+          if (fr !== 40) return;
+          Domains.start(f, {
+            type: 'roulette', life: 380, bg: drawRouletteBg,
+            tick(d, t) {
+              if (d.age % 80 !== 40 || d.lastSpin === d.age) return;
+              d.lastSpin = d.age;
+              const r = Math.random(), slot = r < 0.2 ? 'green' : r < 0.6 ? 'red' : 'black';
+              FX.text(W / 2, 140, slot.toUpperCase(), slot === 'green' ? '#5fd65a' : slot === 'red' ? '#ff4d5a' : '#ffffff', 40, 60);
+              Sound.play('tick');
+              if (slot === 'green') { triggerJackpot(f); f.hp = Math.min(f.maxHp, f.hp + 120); return; }
+              for (const v of World.enemies(f)) {
+                if (v.state === 'ko') continue;
+                if (slot === 'red') { FX.explosion(v.x, v.midY, 70, ['#fff3b0', '#ff5a3a', '#a01828']); Combat.hit(f, v, { dmg: 65, kb: 8, kby: -9, launch: true, fx: 'fire', type: 'domain', sureHit: true, x: v.x, y: v.midY, dir: dirTo(f, v) }); }
+                else { v.applyStun(60, true, true); FX.text(v.x, v.y - 180, 'FROZEN', '#bfe6ff', 22, 50); }
+              }
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Spin the Reels', icon: '運', color: '#5fd65a', cost: 15, cd: 240, ai: { min: 300, max: 1280, when: f => !f.buffs.jackpot },
+      desc: 'Pure gambling: spins the reels with much better odds. Jackpot starts a Lucky Streak; two of a kind refunds 20 cursed energy; a miss still builds luck.',
+      move: {
+        id: 'spin', kind: 'special', startup: 16, active: 1, recovery: 10, poses: ['sign', 'win'],
+        onFrame(f, fr) {
+          if (fr !== 16) return;
+          const res = spinReels(f, 0.2);
+          if (res === 'pair') { f.gainCe(20); FX.text(f.x, f.y - 200, '+20 CE', '#9fd0ff', 20, 40); }
+          if (res === 'miss') FX.text(f.x, f.y - 200, 'so close...', '#9aa0b0', 18, 40);
+        },
+      },
+    },
+  ],
+};
+
+/* ---------------------------------------------------------------- new cursed spirits (original) */
+
+// Swamp ghost: hooded, robe trailing into mud, two pale eyes.
+function drawSwampBg(ctx, d, a) {
+  ctx.save(); ctx.globalAlpha = a;
+  const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#0e1a12'); g.addColorStop(1, '#2a3a20');
+  ctx.fillStyle = g; ctx.fillRect(-30, -30, W + 60, H + 60);
+  ctx.fillStyle = 'rgba(150,180,120,0.12)';
+  for (let i = 0; i < 6; i++) { ctx.beginPath(); ctx.ellipse((i * 250 + d.age * 0.5) % (W + 200) - 100, 200 + (i % 3) * 90, 220, 40, 0, 0, 6.283); ctx.fill(); }
+  ctx.fillStyle = '#2a2a18'; ctx.fillRect(-30, FLOOR - 6, W + 60, H - FLOOR + 40);
+  ctx.fillStyle = 'rgba(90,110,60,0.6)';
+  for (let i = 0; i < 12; i++) { ctx.beginPath(); ctx.ellipse((i * 113) % W, FLOOR + 4 + (i % 4) * 14, 30 + Math.sin(d.age * 0.05 + i) * 6, 5, 0, 0, 6.283); ctx.fill(); }
+  ctx.restore();
+}
+
+const WRAITH = {
+  id: 'wraith', name: 'Mire Wraith', short: 'WRAITH', title: 'Cursed Spirit of the Bog', kanji: '沼霊', color: '#8aa86a', curse: true,
+  style: 'A slippery controller: slows opponents with mud, drags them under with grasping hands and sinks through the floor.',
+  bio: 'Born from the fear of drowning in dark water. It never quite walks — it seeps from place to place.',
+  passive: { name: 'Seeping Body', desc: 'Its mud slows anyone it hits by 40% for a few seconds, and it slowly regenerates while standing still.' },
+  hp: 1000, speed: 0.95, melee: { power: 1.0, reach: 8 },
+  look: curseLook('#b8c8a8', '#3a4a2a'), aiStyle: { pref: 220, ranged: true },
+  passiveTick(f) { if (f.state === 'idle' && World.active) f.hp = Math.min(f.maxHp, f.hp + 0.15); if (f.anim % 9 === 0 && f.state !== 'ko') FX.add({ type: 'smoke', x: f.x + U.rand(-10, 10), y: f.y - 4, vy: 0.3, life: 30, size: 6, color: '#3a4a2a', drag: 0.98 }); },
+  drawTorso(g) {
+    const { ctx, sk, col, OL } = g;
+    // tattered robe hanging over the legs
+    ctx.fillStyle = col('#3a4a2a'); ctx.strokeStyle = OL; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(sk.sh[0] - 14, sk.sh[1]); ctx.lineTo(sk.sh[0] + 14, sk.sh[1]);
+    for (let i = 0; i <= 6; i++) ctx.lineTo(18 - i * 6, 40 + (i % 2) * 10);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  },
+  drawHead(g) {
+    const { ctx, sk, col, OL, o } = g, [hx, hy] = sk.head;
+    ctx.fillStyle = col('#2a3420'); ctx.strokeStyle = OL; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(hx - 18, hy + 14); ctx.quadraticCurveTo(hx - 20, hy - 26, hx + 6, hy - 22); ctx.quadraticCurveTo(hx + 22, hy - 10, hx + 18, hy + 14); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = col('#0e140a'); ctx.beginPath(); ctx.ellipse(hx + 4, hy, 11, 13, 0, 0, 6.283); ctx.fill();
+    if (o.white || o.tint) return;
+    ctx.fillStyle = '#e8f0d0'; ctx.beginPath(); ctx.ellipse(hx + 2, hy - 1, 2.5, 3.5, 0, 0, 6.283); ctx.ellipse(hx + 10, hy - 1, 2, 3, 0, 0, 6.283); ctx.fill();
+  },
+  abilities: [
+    {
+      name: 'Mud Glob', icon: '泥', color: '#8a7a4a', cost: 15, cd: 140, ai: { min: 140, max: 700 },
+      desc: 'Lobs a heavy glob of mud that slows whoever it hits.',
+      move: { id: 'mudglob', kind: 'special', startup: 12, active: 1, recovery: 14, poses: ['castW', 'cast'],
+        onFrame(f, fr) {
+          if (fr !== 12) return;
+          Sound.play('bite');
+          spawnProj(f, { x: f.x + f.facing * 30, y: f.y - 120, vx: f.facing * 11, vy: -6, r: 16, life: 100, clash: 1,
+            hits: { dmg: 35, kb: 4, stun: 18, color: '#8a7a4a' }, onHit(e, t) { t.buffs.mud = 180; },
+            tick(e) { e.vy += 0.3; if (e.y > FLOOR) e.kill('ground'); },
+            onEnd(e) { FX.spark(e.x, e.y, '#6a5a3a', 10, 4); },
+            render(ctx, e) { ctx.fillStyle = '#5a4a2a'; ctx.strokeStyle = '#1a140a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(e.x, e.y, 16, 13, e.age * 0.2, 0, 6.283); ctx.fill(); ctx.stroke(); } });
+        } },
+    },
+    {
+      name: 'Sink', icon: '沈', color: '#3a4a2a', cost: 20, cd: 260, ai: { min: 150, max: 900 },
+      desc: 'Melts into the floor and rises up beneath the opponent with an uppercut.',
+      move: { id: 'sink', kind: 'special', startup: 22, active: 4, recovery: 18, poses: ['block', 'upper'],
+        hitbox: { x: -10, y: -150, w: 80, h: 150 }, hit: { dmg: 65, kb: 6, kby: -15, launch: true, hitstop: 8, color: '#8aa86a' },
+        getPose: (f, fr) => (fr < 20 ? POSES.down : POSES.upper),
+        onFrame(f, fr, t) {
+          if (fr < 20) f.invuln = Math.max(f.invuln, 2);
+          if (fr === 2) { Sound.play('whoosh'); FX.smoke(f.x, f.y - 10, '#3a4a2a', 12, 30, 16); }
+          if (fr === 18 && t) { f.x = t.x - t.facing * 30; f.clampWalls(); f.facing = t.x >= f.x ? 1 : -1; FX.smoke(f.x, f.y - 10, '#3a4a2a', 12, 30, 16); }
+        } },
+    },
+    {
+      name: 'Grasping Hands', icon: '掴', color: '#6a8a5a', cost: 25, cd: 300, ai: { min: 100, max: 900 },
+      desc: 'Muddy hands burst up beneath the opponent and hold them in place.',
+      move: { id: 'hands', kind: 'special', startup: 14, active: 1, recovery: 18, poses: ['castW', 'point'],
+        onFrame(f, fr, t) {
+          if (fr !== 14 || !t) return;
+          eruption(f, t.x, { y: World.groundAt(t.x, t.y), delay: 24, w: 80, h: 120, kind: 'shadow', tele: '#6a8a5a', sfx: 'grab', debris: '#3a4a2a',
+            hits: { dmg: 30, stunAdd: 55, kb: 0, unblockable: true, color: '#6a8a5a' } });
+        } },
+    },
+    {
+      name: 'Bog Pool', icon: '沼', color: '#5a6a3a', cost: 25, cd: 360, ai: { min: 0, max: 400 },
+      desc: 'Spreads a pool of sucking mud in front of it for five seconds. Anyone standing in it is slowed and slowly hurt.',
+      move: { id: 'bog', kind: 'special', startup: 12, active: 1, recovery: 14, poses: ['heavyW', 'block'],
+        onFrame(f, fr) {
+          if (fr !== 12) return;
+          FX.dust(f.x + f.facing * 150, FLOOR, 12); Sound.play('land');
+          spawnSummon(f, { x: f.x + f.facing * 150, y: FLOOR, life: 300, layer: 'back',
+            tick(e) {
+              for (const v of World.enemies(f)) {
+                if (v.state === 'ko' || Math.abs(v.x - e.x) > 120 || v.y < FLOOR - 10) continue;
+                v.buffs.mud = Math.max(v.buffs.mud || 0, 20);
+                if (e.age % 20 === 0) Combat.hit(f, v, { dmg: 6, kb: 0, stun: 4, hitstop: 0, noScale: true, quiet: true, sfx: 'tick', x: v.x, y: v.y - 20, dir: 1 });
+              }
+            },
+            render(ctx, e) {
+              ctx.save(); ctx.globalAlpha = Math.min(1, e.age / 10, (e.life - e.age) / 20);
+              ctx.fillStyle = '#3a301a'; ctx.beginPath(); ctx.ellipse(e.x, FLOOR + 2, 125, 12, 0, 0, 6.283); ctx.fill();
+              ctx.fillStyle = 'rgba(120,110,60,0.6)';
+              for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(e.x - 90 + i * 60, FLOOR - 1, 3 + Math.sin(e.age * 0.2 + i) * 2, 0, 6.283); ctx.fill(); }
+              ctx.restore();
+            } });
+        } },
+    },
+    {
+      name: 'Drowning Mire', icon: '溺', color: '#8aa86a', cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 1280 },
+      desc: 'DOMAIN EXPANSION. Floods the arena with black bog water: opponents are slowed, and muddy hands keep dragging them down.',
+      move: { id: 'mire', kind: 'ult', startup: 60, active: 0, recovery: 0, poses: ['sign', 'sign'],
+        onStart(f) { f.invuln = 70; domainCutscene(f, 'hands', 'DROWNING MIRE'); FX.banner('DOMAIN EXPANSION', 'DROWNING MIRE', '#8aa86a', 130); FX.slow(40, 0.35); Sound.play('charge'); },
+        onFrame(f, fr) {
+          f.invuln = Math.max(f.invuln, 2);
+          if (fr !== 40) return;
+          Domains.start(f, { type: 'mire', life: 360, slowOpp: true, bg: drawSwampBg,
+            tick(d, t) {
+              if (!t || t.state === 'ko' || d.age % 45 !== 20) return;
+              eruption(f, t.x, { y: World.groundAt(t.x, t.y), delay: 18, w: 80, h: 130, kind: 'shadow', tele: '#6a8a5a', sfx: 'grab', debris: '#3a4a2a',
+                hits: { dmg: 35, stunAdd: 30, kb: 0, unblockable: true, type: 'domain', color: '#6a8a5a' } });
+            } });
+        } },
+    },
+  ],
+};
+
+// Paper-lantern spirit: a floating lantern head with one big eye and a long tongue (a folklore yokai, drawn originally).
+const LANTERN = {
+  id: 'lantern', name: 'Lantern Spirit', short: 'LANTERN', title: 'Cursed Spirit of the Night Festival', kanji: '提灯', color: '#ff9a3a', curse: true,
+  style: 'A tricky zoner: homing fire wisps, a blinding flash, and a tongue that lashes out from range.',
+  bio: 'An old festival lantern that soaked up a century of whispered ghost stories until it opened its eye.',
+  passive: { name: 'Paper Body', desc: 'Light and floaty: Lantern Spirit falls slowly and can double-jump higher, but fire attacks hurt it 25% more.' },
+  hp: 950, speed: 1.05, melee: { power: 0.95 },
+  look: curseLook('#f0e0c0', '#6a2a1a'), aiStyle: { pref: 260, ranged: true },
+  onIncoming(f, dmg, h) { return { dmg: h.fx === 'fire' ? dmg * 1.25 : dmg }; },
+  passiveTick(f) { if (!f.onGround && f.vy > 3) f.vy = 3; },
+  drawHead(g) {
+    const { ctx, sk, col, OL, o } = g, [hx, hy] = sk.head;
+    // ribbed paper lantern
+    ctx.fillStyle = col('#f4e0b0'); ctx.strokeStyle = OL; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.ellipse(hx, hy - 4, 17, 22, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = col('#2a1a10'); ctx.fillRect(hx - 9, hy - 30, 18, 6); ctx.fillRect(hx - 9, hy + 16, 18, 5);
+    if (o.white || o.tint) return;
+    ctx.strokeStyle = 'rgba(160,90,40,0.6)'; ctx.lineWidth = 1.2;
+    for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.ellipse(hx, hy - 4 + i * 8, 17 * Math.sqrt(1 - (i * 8 / 22) ** 2), 2, 0, 0, 6.283); ctx.stroke(); }
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(hx + 5, hy - 8, 7, 8, 0, 0, 6.283); ctx.fill(); ctx.strokeStyle = OL; ctx.stroke();
+    ctx.fillStyle = '#1a0a04'; ctx.beginPath(); ctx.arc(hx + 7, hy - 8, 3.5, 0, 6.283); ctx.fill();
+    ctx.fillStyle = '#c4122f'; ctx.beginPath(); ctx.moveTo(hx + 2, hy + 6); ctx.quadraticCurveTo(hx + 16, hy + 8, hx + 14, hy + 20); ctx.quadraticCurveTo(hx + 8, hy + 12, hx + 2, hy + 10); ctx.fill();
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.25 + 0.1 * Math.sin((o.fighter ? o.fighter.anim : 0) * 0.2);
+    ctx.fillStyle = '#ff9a3a'; ctx.beginPath(); ctx.arc(hx, hy - 4, 30, 0, 6.283); ctx.fill(); ctx.restore();
+  },
+  abilities: [
+    {
+      name: 'Will-o\'-Wisp', icon: '火', color: '#ff9a3a', cost: 18, cd: 180, ai: { min: 120, max: 900 },
+      desc: 'Releases three ghostly flames that drift after the opponent.',
+      move: { id: 'wisps', kind: 'special', startup: 12, active: 1, recovery: 16, poses: ['castW', 'cast'],
+        onFrame(f, fr) {
+          if (fr !== 12) return;
+          Sound.play('fire');
+          for (let i = 0; i < 3; i++) spawnProj(f, { x: f.x + f.facing * 20, y: f.y - 130 + i * 20, vx: f.facing * 3, vy: -2 + i * 2, r: 11, life: 150, clash: 1, wallKill: false,
+            hits: { dmg: 24, kb: 3, stun: 14, fx: 'fire', hitstop: 2 },
+            tick(e, t) { if (t && e.age > 12) { const a = Math.atan2(t.midY - e.y, t.x - e.x); e.vx = U.lerp(e.vx, Math.cos(a) * 5.5, 0.04); e.vy = U.lerp(e.vy, Math.sin(a) * 5.5, 0.04); } if (e.age % 3 === 0) FX.glow(e.x, e.y, '#7ac8ff', 8, 10); },
+            render(ctx, e) { glowOrb(ctx, e.x, e.y, 8, '#e0f6ff', '#3a8aff'); } });
+        } },
+    },
+    {
+      name: 'Festival Flash', icon: '閃', color: '#ffe36a', cost: 22, cd: 300, ai: { min: 0, max: 220 },
+      desc: 'Its light flares blindingly, stunning everyone close by.',
+      move: { id: 'flash', kind: 'special', startup: 14, active: 1, recovery: 18, poses: ['block', 'win'],
+        onFrame(f, fr) {
+          if (fr !== 14) return;
+          FX.flash('#fff3c0', 0.5); FX.ring(f.x, f.y - 110, '#ffe36a', 220, 18, 5); Sound.play('zap');
+          for (const v of World.enemies(f)) if (near(v, f.x, f.midY, 220, 200)) Combat.hit(f, v, { dmg: 20, stunAdd: 45, kb: 2, x: v.x, y: v.midY, dir: dirTo(f, v) });
+        } },
+    },
+    {
+      name: 'Tongue Lash', icon: '舌', color: '#c4122f', cost: 15, cd: 150, ai: { min: 80, max: 240 },
+      desc: 'Its long tongue whips out across the floor and drags the opponent in.',
+      move: { id: 'tongue', kind: 'special', startup: 10, active: 6, recovery: 18, poses: ['castW', 'point'],
+        hitbox: { x: 10, y: -150, w: 230, h: 40 }, hit: { dmg: 35, kb: 0, stun: 30, color: '#c4122f' },
+        onFrame(f, fr) { if (fr >= 10 && fr < 16) { const h = headPos(f); FX.slash(h.x + f.facing * 115, h.y + 14, 0, 230, '#c4122f', 5, 3); } },
+        onHit(f, t) { t.x = f.x + f.facing * 70; t.clampWalls(); Sound.play('grab'); } },
+    },
+    {
+      name: 'Paper Ward', icon: '紙', color: '#f4e0b0', cost: 20, cd: 480, ai: { min: 0, max: 500, when: f => !f.buffs.ward },
+      desc: 'Wraps itself in layers of charmed paper for 5 seconds, halving all damage it takes.',
+      move: { id: 'ward', kind: 'special', startup: 10, active: 1, recovery: 10, poses: ['block', 'block'],
+        onFrame(f, fr) { if (fr === 10) { f.buffs.ward = 300; Sound.play('heal'); FX.ring(f.x, f.y - 80, '#f4e0b0', 90, 18, 4); } } },
+    },
+    {
+      name: 'Hundred Lanterns', icon: '百', color: '#ff9a3a', cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 1280 },
+      desc: 'ULTIMATE. A night parade of burning lanterns rains down across the whole arena.',
+      move: { id: 'hundred', kind: 'ult', startup: 30, active: 0, recovery: 0, total: 120, poses: ['sign', 'upper'],
+        onStart(f) { f.invuln = 40; FX.banner('ULTIMATE', 'HUNDRED LANTERNS', '#ff9a3a', 110); FX.slow(30, 0.4); Sound.play('charge'); },
+        onFrame(f, fr, t) {
+          if (fr < 30 || fr > 110 || fr % 5) return;
+          const tx = t && Math.random() < 0.5 ? t.x + U.rand(-60, 60) : U.rand(World.left + 40, World.right - 40);
+          spawnProj(f, { x: tx, y: -40, vx: 0, vy: 11, r: 18, life: 100, wallKill: false,
+            hits: { dmg: 22, kb: 4, kby: -5, launch: true, fx: 'fire', hitstop: 2 },
+            tick(e) { if (e.y > FLOOR - 10) e.kill('ground'); },
+            onEnd(e) { FX.explosion(e.x, Math.min(e.y, FLOOR - 10), 34, ['#fff3b0', '#ff9a2a', '#ff3a1a']); },
+            render(ctx, e) { ctx.fillStyle = '#f4e0b0'; ctx.strokeStyle = '#2a1a10'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(e.x, e.y, 12, 16, 0, 0, 6.283); ctx.fill(); ctx.stroke(); glowOrb(ctx, e.x, e.y, 8, '#fff3b0', '#ff9a3a', 0.7); } });
+        } },
+    },
+  ],
+};
+LANTERN.onIncoming = (f, dmg, h) => ({ dmg: dmg * (h.fx === 'fire' ? 1.25 : 1) * (f.buffs.ward ? 0.5 : 1) });
+
+// Crow spirit: a gaunt figure in a feather cloak with a long beaked mask.
+function crowRender(ctx, e) {
+  ctx.save(); ctx.translate(e.x, e.y); ctx.scale(e.vx >= 0 ? 1 : -1, 1);
+  const flap = Math.sin(e.age * 0.6) * 0.8;
+  ctx.fillStyle = '#16161e'; ctx.strokeStyle = '#3a3a52'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.ellipse(0, 0, 11, 6, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-2, -2); ctx.lineTo(-14, -12 - flap * 10); ctx.lineTo(4, -3); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(10, -2); ctx.lineTo(18, 0); ctx.lineTo(10, 2); ctx.fillStyle = '#c9a23a'; ctx.fill();
+  ctx.fillStyle = '#ff3a3a'; ctx.fillRect(6, -3, 2, 2);
+  ctx.restore();
+}
+
+const CROW = {
+  id: 'crow', name: 'Crow Spirit', short: 'CROW', title: 'Cursed Spirit of Ill Omens', kanji: '鴉霊', color: '#7a7aa8', curse: true,
+  style: 'Fast and evasive: flocks of crows, swooping dashes and a cloak that vanishes into the night.',
+  bio: 'A curse born from every superstition about black birds on rooftops. Where it lands, bad luck follows.',
+  passive: { name: 'Ill Omen', desc: 'Moves 15% faster and its dash covers more ground. Every hit it lands has a chance to drain a little cursed energy from the opponent.' },
+  hp: 950, speed: 1.15, melee: { power: 1.0, reach: 6, weapon: 'claw' },
+  look: curseLook('#c8c8d8', '#1a1a26'), aiStyle: { pref: 180, ranged: true },
+  onDealHit(f, t) { if (Math.random() < 0.3) t.ce = Math.max(0, t.ce - 6); },
+  drawTorso(g) {
+    const { ctx, sk, col, OL } = g;
+    // feather cloak draped from the shoulders
+    ctx.fillStyle = col('#16161e'); ctx.strokeStyle = OL; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(sk.sh[0] - 4, sk.sh[1]);
+    for (let i = 0; i < 6; i++) ctx.lineTo(sk.sh[0] - 22 - i * 3, sk.sh[1] + 10 + i * 9 + (i % 2) * 5);
+    ctx.lineTo(sk.sh[0] - 6, sk.sh[1] + 50); ctx.closePath(); ctx.fill(); ctx.stroke();
+  },
+  drawHead(g) {
+    const { ctx, sk, col, OL, o } = g, [hx, hy] = sk.head;
+    headCircle(g, hx, hy, 14, '#1e1e2a');
+    // long curved beak mask
+    ctx.fillStyle = col('#d8d0b8'); ctx.strokeStyle = OL; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(hx + 8, hy - 6); ctx.quadraticCurveTo(hx + 30, hy, hx + 34, hy + 12); ctx.quadraticCurveTo(hx + 20, hy + 6, hx + 8, hy + 6); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = col('#16161e');
+    for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(hx - 6 - i * 3, hy - 10 + i * 4); ctx.lineTo(hx - 22 - i * 2, hy - 18 + i * 8); ctx.lineTo(hx - 8 - i * 3, hy - 4 + i * 4); ctx.fill(); }
+    if (o.white || o.tint) return;
+    ctx.fillStyle = '#ff3a3a'; ctx.beginPath(); ctx.arc(hx + 5, hy - 2, 2.4, 0, 6.283); ctx.fill();
+  },
+  abilities: [
+    {
+      name: 'Crow Volley', icon: '羽', color: '#7a7aa8', cost: 15, cd: 150, ai: { min: 140, max: 800 },
+      desc: 'Sends five crows flying at the opponent in a weaving wave.',
+      move: { id: 'crows', kind: 'special', startup: 10, active: 1, recovery: 14, poses: ['castW', 'cast'],
+        onFrame(f, fr) {
+          if (fr !== 10) return;
+          Sound.play('whoosh');
+          for (let i = 0; i < 5; i++) spawnProj(f, { x: f.x + f.facing * 20, y: f.y - 150 + i * 18, vx: f.facing * (11 + i), vy: 0, r: 12, life: 80, clash: 1, ph: i,
+            hits: { dmg: 16, kb: 2, stun: 12, fx: 'slash', color: '#7a7aa8', hitstop: 1 },
+            tick(e) { e.vy = Math.sin(e.age * 0.25 + e.ph) * 3; }, render: crowRender });
+        } },
+    },
+    {
+      name: 'Swooping Dash', icon: '翔', color: '#9a9ac8', cost: 15, cd: 170, ai: { min: 60, max: 300 },
+      desc: 'Swoops low across the ground in a blur of feathers, raking the opponent on the way past.',
+      move: { id: 'swoop', kind: 'special', startup: 5, active: 14, recovery: 14, keepVel: true, hitEvery: 5, poses: ['dash', 'dash'], sfx: 'dash',
+        hitbox: { x: -20, y: -120, w: 90, h: 100 }, hit: { dmg: 18, kb: 2, stun: 16, fx: 'slash', color: '#7a7aa8', noScale: true },
+        onFrame(f, fr) { if (fr >= 5 && fr < 19) { f.vx = f.facing * 18; f.invuln = Math.max(f.invuln, 2); if (fr % 2 === 0) FX.ghost(f, '#7a7aa8'); } if (fr === 19) f.vx *= 0.2; } },
+    },
+    {
+      name: 'Pecking Swarm', icon: '群', color: '#5a5a7a', cost: 25, cd: 360, ai: { min: 0, max: 700 },
+      desc: 'A swarm of crows settles on the opponent, pecking them repeatedly. The swarm can be swatted away.',
+      move: { id: 'swarm', kind: 'special', startup: 12, active: 1, recovery: 16, poses: ['sign', 'point'],
+        onFrame(f, fr, t) {
+          if (fr !== 12 || !t) return;
+          Sound.play('whoosh');
+          spawnSummon(f, { x: f.x, y: f.y - 150, life: 220, name: 'CROW SWARM', hp: 60, maxHp: 60, hurtbox: e => ({ x: e.x - 36, y: e.y - 30, w: 72, h: 60 }),
+            tick(e, tt) {
+              if (!tt || tt.state === 'ko') return;
+              e.x = U.lerp(e.x, tt.x, 0.08); e.y = U.lerp(e.y, tt.midY - 20, 0.08);
+              if (e.age % 12 === 0 && Math.abs(tt.x - e.x) < 60) Combat.hit(f, tt, { dmg: 7, kb: 1, stun: 10, hitstop: 0, noScale: true, quiet: true, fx: 'slash', color: '#7a7aa8', sfx: 'tick', x: tt.x, y: tt.midY, dir: dirTo(f, tt) });
+            },
+            onEnd(e) { FX.spark(e.x, e.y, '#3a3a52', 10, 5); },
+            render(ctx, e) { for (let i = 0; i < 6; i++) { const a = e.age * 0.2 + i; crowRender(ctx, { x: e.x + Math.cos(a) * 30, y: e.y + Math.sin(a * 1.3) * 20, vx: Math.cos(a + 1.6), age: e.age + i * 3 }); } } });
+        } },
+    },
+    {
+      name: 'Night Veil', icon: '夜', color: '#3a3a52', cost: 18, cd: 300, ai: { min: 0, max: 200 },
+      desc: 'Bursts into a cloud of black feathers, untouchable for a moment, and reforms some distance behind the opponent.',
+      move: { id: 'veil', kind: 'special', startup: 30, active: 0, recovery: 8, poses: ['block', 'idle'],
+        onFrame(f, fr, t) {
+          f.invuln = Math.max(f.invuln, 2);
+          if (fr === 1) { Sound.play('whoosh'); FX.smoke(f.x, f.y - 70, '#16161e', 16, 30, 20); }
+          if (fr === 26 && t) { f.x = t.x - t.facing * 160; f.clampWalls(); f.facing = t.x >= f.x ? 1 : -1; FX.smoke(f.x, f.y - 70, '#16161e', 12, 26, 18); }
+        } },
+    },
+    {
+      name: 'Murder of Crows', icon: '殺', color: '#7a7aa8', cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 1280 },
+      desc: 'ULTIMATE. A vast flock of crows sweeps back and forth across the entire arena three times.',
+      move: { id: 'murder', kind: 'ult', startup: 30, active: 0, recovery: 0, total: 140, poses: ['sign', 'upper'],
+        onStart(f) { f.invuln = 40; FX.banner('ULTIMATE', 'MURDER OF CROWS', '#9a9ac8', 110); FX.slow(30, 0.4); Sound.play('charge'); },
+        onFrame(f, fr) {
+          if (fr < 30 || fr > 130 || fr % 4) return;
+          const pass = Math.floor((fr - 30) / 34), dir = pass % 2 ? -1 : 1;
+          spawnProj(f, { x: dir > 0 ? -40 : W + 40, y: FLOOR - U.rand(30, 200), vx: dir * U.rand(14, 18), vy: 0, r: 14, life: 120, wallKill: false, pierce: true,
+            hits: { dmg: 9, kb: 2, stun: 10, fx: 'slash', color: '#7a7aa8', noScale: true, hitstop: 0, quiet: true }, render: crowRender });
+        } },
+    },
+  ],
+};
+
 /* ---------------------------------------------------------------- roster */
 
-const CHARS = { gojo: GOJO, sukuna: SUKUNA, yuji: YUJI, yuta: YUTA, megumi: MEGUMI, g4: CURSE_G4, g3: CURSE_G3, finger: FINGER_BEARER, hanami: HANAMI, jogo: JOGO, mahito: MAHITO, choso: CHOSO, jin: JIN, ayane: AYANE, bao: BAO };
-const ROSTER = ['yuji', 'gojo', 'sukuna', 'yuta', 'megumi', 'mahito', 'jogo', 'choso', 'jin', 'ayane', 'bao'];
-const CURSE_IDS = ['g4', 'g3', 'finger', 'hanami'];
+const CHARS = { gojo: GOJO, sukuna: SUKUNA, yuji: YUJI, yuta: YUTA, megumi: MEGUMI, g4: CURSE_G4, g3: CURSE_G3, finger: FINGER_BEARER, hanami: HANAMI, jogo: JOGO, mahito: MAHITO, choso: CHOSO, jin: JIN, ayane: AYANE, bao: BAO, daigo: DAIGO, wraith: WRAITH, lantern: LANTERN, crow: CROW };
+const ROSTER = ['yuji', 'gojo', 'sukuna', 'yuta', 'megumi', 'mahito', 'jogo', 'choso', 'jin', 'ayane', 'bao', 'daigo', 'hanami', 'finger', 'g3', 'g4', 'wraith', 'lantern', 'crow'];
+const CURSE_IDS = [];
 
 /* ---------------------------------------------------------------- Story Mode */
 
@@ -3031,18 +3602,37 @@ const STORY = [
     fights: [
       { enemy: 'hanami', diff: 0.4, arena: 'school', text: 'Case one: a forest curse has been feeding on students. Gather your evidence — every blow you take makes the Verdict heavier.' },
       { enemy: 'choso', diff: 0.52, arena: 'shibuya', text: 'Case two: the eldest Death Painting brother left blood all over Shibuya. Close in before his beams pin you down.' },
-      { enemy: 'yuta', diff: 0.64, arena: 'shinjuku', text: 'Case three: a special grade carrying a Queen of Curses. Answer Rika\'s reach with an Objection.' },
-      { enemy: 'sukuna', diff: 0.85, arena: 'shinjuku', boss: true, text: 'The final case: the King of Curses himself. Open the Hall of the Scales and hand down the sentence.' },
+      { enemy: 'yuta', diff: 0.64, arena: 'court', text: 'Case three: a special grade carrying a Queen of Curses. Answer Rika\'s reach with an Objection.' },
+      { enemy: 'sukuna', diff: 0.85, arena: 'court', boss: true, text: 'The final case: the King of Curses himself. Open the Hall of the Scales and hand down the sentence.' },
     ],
   },
   {
     id: 'bao', title: 'The Bamboo Monk', hero: 'bao', kanji: '竹林',
     blurb: 'A gentle panda leaves his mountain monastery when the curses come down from the hills.',
     fights: [
-      { enemy: 'g4', diff: 0.3, arena: 'school', text: 'A small curse has been stealing from the monastery kitchen. Unacceptable. Show it the staff.' },
-      { enemy: 'hanami', diff: 0.45, arena: 'school', text: 'A forest curse thinks the bamboo groves belong to it. They do not.' },
-      { enemy: 'megumi', diff: 0.58, arena: 'shinjuku', text: 'A young sorcerer mistakes you for a curse and sends his shikigami. Smash through them — gently.' },
-      { enemy: 'jin', diff: 0.8, arena: 'shinjuku', boss: true, text: 'A greatsword-wielding mercenary has taken a contract on the "cursed panda." Stand your ground.' },
+      { enemy: 'g4', diff: 0.3, arena: 'bamboo', text: 'A small curse has been stealing from the monastery kitchen. Unacceptable. Show it the staff.' },
+      { enemy: 'hanami', diff: 0.45, arena: 'bamboo', text: 'A forest curse thinks the bamboo groves belong to it. They do not.' },
+      { enemy: 'megumi', diff: 0.58, arena: 'bamboo', text: 'A young sorcerer mistakes you for a curse and sends his shikigami. Smash through them — gently.' },
+      { enemy: 'jin', diff: 0.8, arena: 'bamboo', boss: true, text: 'A greatsword-wielding mercenary has taken a contract on the "cursed panda." Stand your ground.' },
+    ],
+  },  {
+    id: 'daigo', title: 'The High Roller', hero: 'daigo', kanji: '大博打',
+    blurb: 'A gambler who never folds bets everything on one last run of luck through the underground fight circuit.',
+    fights: [
+      { enemy: 'g3', diff: 0.32, arena: 'casino', text: 'Warm-up round in a back-alley ring. Spin the reels, watch the odds climb, and land that first jackpot.' },
+      { enemy: 'bao', diff: 0.46, arena: 'casino', text: 'The house champion is a panda. Of course it is. Keep your distance from the staff and let the cards fly.' },
+      { enemy: 'choso', diff: 0.6, arena: 'casino', text: 'A blood sorcerer who doesn\'t believe in luck. Bait out his beams, then go double or nothing.' },
+      { enemy: 'ayane', diff: 0.8, arena: 'casino', boss: true, text: 'The Arbiter has ruled your gambling illegal. Beat the verdict — the house always wins, until it doesn\'t.' },
+    ],
+  },
+  {
+    id: 'parade', title: 'Night Parade', hero: 'lantern', kanji: '百鬼夜行',
+    blurb: 'On the last night of the festival, an old lantern opens its eye and leads the curses through the streets.',
+    fights: [
+      { enemy: 'g4', diff: 0.32, arena: 'festival', text: 'The festival grounds are quiet. A lesser curse wants to lead the parade instead. Show it who carries the light.' },
+      { enemy: 'crow', diff: 0.46, arena: 'festival', text: 'A crow spirit circles the rooftops, stealing the festival\'s luck. Keep your wisps between you and its flock.' },
+      { enemy: 'wraith', diff: 0.6, arena: 'womb', text: 'The parade route floods with black bog water. Don\'t get dragged under — stay airborne.' },
+      { enemy: 'finger', diff: 0.8, arena: 'shinjuku', boss: true, text: 'Something huge has joined the parade uninvited. Burn it down before it reaches the city.' },
     ],
   },
 ];

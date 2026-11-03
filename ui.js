@@ -145,14 +145,14 @@ const UI = {
           <div class="logo-sub"><span>CURSED</span> CLASH</div>
         </div>
         <nav class="menu-list">
-          <button class="nav" data-act="story"><b>Story Mode</b><small>Eleven chapters against AI curses &amp; sorcerers</small></button>
+          <button class="nav" data-act="story"><b>Story Mode</b><small>Thirteen chapters against AI curses &amp; sorcerers</small></button>
           <button class="nav" data-act="online"><b>Online Battle</b><small>Fight a friend over the internet with a room code</small></button>
           <button class="nav" data-act="cpu"><b>Versus CPU</b><small>Quick match against the AI</small></button>
           <button class="nav" data-act="gallery"><b>Character Gallery</b><small>Techniques, passives &amp; cursed spirits</small></button>
           <button class="nav" data-act="controls"><b>Controls</b><small>Key bindings &amp; tips</small></button>
           <button class="nav" data-act="settings"><b>Settings</b><small>Audio, effects &amp; round rules</small></button>
         </nav>
-        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back · <span class="build">build 13 · ${ROSTER.length} fighters</span></div>
+        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back · <span class="build">build 16 · ${ROSTER.length} fighters</span></div>
       </div>`;
     s.querySelectorAll('[data-act]').forEach(b => { b.onclick = () => this.menuAct(b.dataset.act); });
   },
@@ -299,8 +299,7 @@ const UI = {
     };
     list.appendChild(el('div', 'gal-sep', 'PLAYABLE'));
     ROSTER.forEach(add);
-    list.appendChild(el('div', 'gal-sep', 'CURSED SPIRITS · STORY MODE'));
-    CURSE_IDS.forEach(add);
+    if (CURSE_IDS.length) { list.appendChild(el('div', 'gal-sep', 'CURSED SPIRITS · STORY MODE')); CURSE_IDS.forEach(add); }
     const back = el('button', 'nav gal-item back', '← Back');
     back.onclick = () => { Sound.play('back'); this.openMenu(3); };
     list.appendChild(back);
@@ -788,6 +787,19 @@ function drawHandSign(ctx, sign, cx, cy, k, skin) {
       palm(-44, 14, 26, 14, 0.15); palm(44, 14, 26, 14, -0.15);
       for (let i = 0; i < 4; i++) { fing(-60 + i * 8, 6, -66 + i * 9, -6, 8); fing(60 - i * 8, 6, 66 - i * 9, -6, 8); }
       ctx.strokeStyle = '#c9a23a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-44, 0); ctx.lineTo(0, -60); ctx.lineTo(44, 0); ctx.stroke();
+      break;
+    case 'cards': // one hand fanning out a spread of playing cards
+      sleeve(0, 0);
+      for (let i = -2; i <= 2; i++) {
+        ctx.save(); ctx.translate(0, 0); ctx.rotate(i * 0.22);
+        ctx.fillStyle = '#f8f4ea'; ctx.strokeStyle = OL; ctx.lineWidth = 2;
+        ctx.fillRect(-14, -78, 28, 40); ctx.strokeRect(-14, -78, 28, 40);
+        ctx.fillStyle = i % 2 ? '#c4122f' : '#16161c'; ctx.font = '900 16px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(i % 2 ? '♦' : '♣', 0, -52);
+        ctx.restore();
+      }
+      palm(0, 20, 24, 28);
+      for (let i = 0; i < 3; i++) fing(-14 + i * 10, 0, -14 + i * 10, -22, 9);
+      fing(-24, 26, -30, 4, 11);
       break;
     default: // Mahito: palms pressed together
       sleeve(-14, 0.1); sleeve(14, -0.1);

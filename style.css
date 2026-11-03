@@ -61,7 +61,7 @@ kbd { display: inline-block; min-width: 1.8em; padding: 0.1em 0.4em; border: 1px
 .set-row.back { justify-content: center; color: var(--muted); }
 
 /* ---------- arena select */
-.arena-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1em; width: 100%; }
+.arena-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.8em; width: 100%; }
 .arena-card { background: var(--panel); border: 2px solid var(--line); border-radius: 0.4em; overflow: hidden; text-align: left; }
 .arena-card canvas { width: 100%; display: block; aspect-ratio: 16 / 9; }
 .arena-name { padding: 0.6em 0.8em; }
@@ -156,8 +156,8 @@ kbd { display: inline-block; min-width: 1.8em; padding: 0.1em 0.4em; border: 1px
 .lobby small { margin-left: auto; color: var(--muted); }
 .sel-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.8em; margin: 0.9em 0; }
 .build { color: var(--gold); }
-.sel-card { --c: #fff; position: relative; width: 7.6em; background: var(--panel); border: 2px solid var(--line); border-radius: 0.4em; padding: 0.5em 0.4em 0.6em; }
-.sel-card canvas { width: 6.5em; aspect-ratio: 1; display: block; margin: 0 auto; }
+.sel-card { --c: #fff; position: relative; width: 6.2em; background: var(--panel); border: 2px solid var(--line); border-radius: 0.4em; padding: 0.5em 0.4em 0.6em; }
+.sel-card canvas { width: 4.6em; aspect-ratio: 1; display: block; margin: 0 auto; }
 .sel-name b { display: block; font-family: Impact, sans-serif; font-weight: 400; font-size: 1.15em; letter-spacing: 0.05em; color: var(--c); }
 .sel-name small { color: var(--muted); font-size: 0.72em; }
 .sel-card i { position: absolute; top: -0.7em; font-style: normal; font-size: 0.7em; font-weight: 900; padding: 0.1em 0.45em; border-radius: 0.2em; display: none; color: #000; }
