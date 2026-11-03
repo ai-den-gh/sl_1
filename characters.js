@@ -1025,26 +1025,33 @@ const YUJI = {
   abilities: [
     {
       name: 'Divergent Fist', icon: '拳', color: '#59a8ff', cost: 15, cd: 130, ai: { min: 0, max: 110 },
-      desc: 'A punch whose cursed energy lands a split second later as a second, delayed impact.',
+      desc: 'A rapid barrage of six punches. Each one is followed a split second later by a delayed burst of cursed energy, and the final burst sends the opponent flying.',
       move: {
-        id: 'divergent', kind: 'special', startup: 6, active: 3, recovery: 18, lunge: 8, poses: ['jabW', 'jab'], sfx: 'whoosh',
-        hitbox: { x: 4, y: -122, w: 66, h: 36 }, hit: { dmg: 38, kb: 2, stun: 34, fx: 'blue' },
+        id: 'divergent', kind: 'special', startup: 5, active: 30, recovery: 16, lunge: 6, hitEvery: 5, sfx: 'whoosh',
+        hitbox: { x: 4, y: -124, w: 72, h: 40 }, hit: { dmg: 11, kb: 1, stun: 24, fx: 'blue', hitstop: 2 },
+        getPose: (f, fr) => (fr < 5 ? POSES.jabW : fr < 35 ? (Math.floor((fr - 5) / 3) % 2 ? POSES.cross : POSES.jab) : POSES.idle),
+        onFrame(f, fr) {
+          if (fr >= 5 && fr < 35) { f.vx = f.facing * 1.6; if ((fr - 5) % 5 === 0) Sound.play('whoosh'); }
+        },
         onHit(f, t) {
+          const n = (f.mvars.dfHits = (f.mvars.dfHits || 0) + 1), last = n >= 6;
           World.later(14, () => {
             if (t.state === 'ko') return;
-            FX.ring(t.x, t.midY, '#59a8ff', 80, 18, 5);
-            Combat.hit(f, t, { dmg: 52, kb: 11, kby: -5, launch: true, hitstop: 7, shake: 6, fx: 'blue', sfx: 'heavy', sureHit: true, x: t.x, y: t.midY, dir: f.facing });
+            FX.ring(t.x, t.midY, '#59a8ff', last ? 90 : 50, 16, last ? 6 : 3);
+            Combat.hit(f, t, last
+              ? { dmg: 30, kb: 12, kby: -6, launch: true, hitstop: 8, shake: 7, fx: 'blue', sfx: 'heavy', sureHit: true, x: t.x, y: t.midY, dir: f.facing }
+              : { dmg: 12, kb: 1, stun: 18, hitstop: 2, fx: 'blue', sfx: 'hit', sureHit: true, quiet: true, x: t.x + U.rand(-10, 10), y: t.midY + U.rand(-20, 20), dir: f.facing });
           });
         },
       },
     },
     {
       name: 'Black Flash', icon: '黒', color: '#ff1f3d', cost: 30, cd: 240, ai: { min: 0, max: 120 },
-      desc: 'Press again the instant the fist flashes red to unleash a true Black Flash: 2.5× damage and bonus cursed energy.',
+      desc: 'A 3 in 4 chance to spark a true Black Flash (2.5× damage and bonus cursed energy) — and pressing again the instant the fist flashes red guarantees it.',
       move: {
         id: 'blackflash', kind: 'special', startup: 16, active: 4, recovery: 22, lunge: 9, poses: ['heavyW', 'heavy'], timing: [8, 13],
         hitbox: { x: 4, y: -126, w: 72, h: 42 },
-        onStart(f) { f.mvars.bf = Math.random() < 0.12; },
+        onStart(f) { f.mvars.bf = Math.random() < 0.75; },
         onFrame(f, fr) {
           if (fr < 8 || fr > 13) return;
           const hp = handPos(f);
@@ -1082,7 +1089,7 @@ const YUJI = {
     },
     {
       name: 'Black Flash Barrage', icon: '閃', color: '#ff1f3d', cost: 100, cd: 1400, ult: true, ai: { min: 0, max: 380 },
-      desc: 'ULTIMATE. Rush in and bury the opponent under a storm of blows, ending in a devastating Black Flash.',
+      desc: 'ULTIMATE. Rush in and bury the opponent under a storm of blows — each with a 3 in 4 chance to be a Black Flash — ending in a devastating Black Flash.',
       move: {
         id: 'barrage', kind: 'ult', total: 400, startup: 400, active: 0, recovery: 0,
         onStart(f) { FX.banner('ULTIMATE', 'BLACK FLASH BARRAGE', '#ff3355', 100); FX.slow(25, 0.4); f.mvars.phase = 'rush'; },
@@ -1113,7 +1120,7 @@ const YUJI = {
             t.x = f.x + f.facing * 52; t.clampWalls();
             if (k % 7 === 3 && k < 70) {
               // Every blow in the barrage can spark into a Black Flash without slowing the rush.
-              const bf = Math.random() < 0.3;
+              const bf = Math.random() < 0.75;
               Combat.hit(f, t, bf
                 ? { dmg: 48, kb: 0, stun: 10, unblockable: true, sureHit: true, noScale: true, hitstop: 2, shake: 9, fx: 'bf', sfx: 'bf', x: t.x - f.facing * 10, y: t.midY + U.rand(-25, 25), dir: f.facing }
                 : { dmg: 20, kb: 0, stun: 10, unblockable: true, sureHit: true, noScale: true, hitstop: 2, shake: 3, x: t.x - f.facing * 10, y: t.midY + U.rand(-25, 25), dir: f.facing });
@@ -2122,10 +2129,15 @@ const JOGO = {
 
 const MAHITO = {
   id: 'mahito', name: 'Mahito', short: 'MAHITO', title: 'Disaster Curse of Humanity', kanji: '真人', color: '#8affd2', curse: true,
-  style: 'Reshapes his own body: long-reach blades, spikes, and a soul-warping touch.', bio: 'A curse born from humans\' hatred of one another. He can reshape souls with a touch.',
-  passive: { name: 'Soul Reshaping', desc: 'Mahito constantly reshapes his own soul, regenerating health over time. Landing Soul Touch restores 60 more.' },
-  passiveTick(f) { if (f.state !== 'ko' && World.active) f.hp = Math.min(f.maxHp, f.hp + 0.07); },
-  hp: 1100, speed: 1.05, melee: { power: 1.05, reach: 10 },
+  style: 'Reshapes his own body: long-reach blades, spines, diving attacks, warped servants and a soul-warping touch.', bio: 'A curse born from humans\' hatred of one another. He can reshape souls with a touch.',
+  passive: { name: 'Soul Reshaping', desc: 'Mahito constantly reshapes his own soul: he regenerates about 7 HP per second, melee attacks hurt him 15% less, and landing Soul Touch restores 90 more.' },
+  passiveTick(f) {
+    if (f.state !== 'ko' && World.active) f.hp = Math.min(f.maxHp, f.hp + 0.12);
+    if (f.buffs.mutate && f.anim % 3 === 0) FX.glow(f.x + U.rand(-24, 24), f.y - U.rand(10, 150) * f.scale, U.pick(['#8affd2', '#3a6a5a']), 12, 16, 0, -1.2);
+  },
+  dmgMult(f) { return f.buffs.mutate ? 1.3 : 1; },
+  onIncoming(f, dmg, h) { let k = h.melee ? 0.85 : 1; if (f.buffs.mutate) k *= 0.75; return { dmg: dmg * k, kb: f.buffs.mutate ? 0.5 : 1 }; },
+  hp: 1250, speed: 1.12, melee: { power: 1.2, reach: 14 },
   look: curseLook('#c9d3dc', '#2a3240'), aiStyle: { pref: 110 },
   drawHead(g) {
     const { ctx, sk, col, OL } = g, [hx, hy] = sk.head;
@@ -2144,18 +2156,18 @@ const MAHITO = {
     {
       name: 'Arm Blade', icon: '刃', color: '#c9d3dc', cost: 15, cd: 120, ai: { min: 60, max: 200 }, desc: 'Reshapes his arm into a long blade and slashes.',
       move: { id: 'armblade', kind: 'special', startup: 12, active: 4, recovery: 18, lunge: 6, poses: ['slashW', 'slash'], sfx: 'swish', swing: { color: '#c9f0e0', r: 160, w: 8 },
-        hitbox: { x: 0, y: -140, w: 175, h: 90 }, hit: { dmg: 60, kb: 8, kby: -4, stun: 24, fx: 'slash', color: '#8affd2' } },
+        hitbox: { x: 0, y: -140, w: 175, h: 90 }, hit: { dmg: 78, kb: 9, kby: -5, stun: 26, fx: 'slash', color: '#8affd2', blood: 6 } },
     },
     {
       name: 'Soul Touch', icon: '魂', color: '#8affd2', cost: 30, cd: 360, ai: { min: 0, max: 110 }, desc: 'Lunges with an open palm. On contact, warps the soul for heavy unblockable damage.',
       move: { id: 'touch', kind: 'special', startup: 14, active: 6, recovery: 24, lunge: 12, poses: ['castW', 'point'],
-        hitbox: { x: 0, y: -130, w: 64, h: 70 }, hit: { dmg: 105, unblockable: true, kb: 10, kby: -8, launch: true, fx: 'soul', hitstop: 12, shake: 8, sfx: 'heavy' },
-        onHit(f, t) { FX.text(t.x, t.y - 180, 'IDLE TRANSFIGURATION', '#8affd2', 22, 60); f.hp = Math.min(f.maxHp, f.hp + 60); FX.spark(f.x, f.midY, '#8affd2', 10, 5); } },
+        hitbox: { x: 0, y: -130, w: 64, h: 70 }, hit: { dmg: 135, unblockable: true, kb: 10, kby: -8, launch: true, fx: 'soul', hitstop: 12, shake: 8, sfx: 'heavy' },
+        onHit(f, t) { FX.text(t.x, t.y - 180, 'IDLE TRANSFIGURATION', '#8affd2', 22, 60); f.hp = Math.min(f.maxHp, f.hp + 90); FX.spark(f.x, f.midY, '#8affd2', 10, 5); } },
     },
     {
       name: 'Body Repel', icon: '棘', color: '#9aa5b0', cost: 20, cd: 300, ai: { min: 0, max: 120 }, desc: 'Spikes erupt from his whole body, launching anyone too close.',
       move: { id: 'repel', kind: 'special', startup: 9, active: 1, recovery: 20, poses: ['block', 'sign'],
-        onFrame(f, fr) { if (fr === 9) for (const d of [-1, 1]) eruption(f, f.x + d * 50, { y: f.y, delay: 0, dur: 18, w: 90, h: 130, kind: 'spike', sfx: 'slash', shake: 5, hits: { dmg: 55, kb: 10, kby: -10, launch: true, fx: 'slash' } }); } },
+        onFrame(f, fr) { if (fr === 9) for (const d of [-1, 1]) eruption(f, f.x + d * 50, { y: f.y, delay: 0, dur: 18, w: 90, h: 130, kind: 'spike', sfx: 'slash', shake: 5, hits: { dmg: 72, kb: 11, kby: -11, launch: true, fx: 'slash', blood: 6 } }); } },
     },
     {
       name: 'Self-Embodiment of Perfection', icon: '真', color: '#8affd2', cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 1280 },
@@ -2173,9 +2185,107 @@ const MAHITO = {
               if (d.age !== 150 || !t || t.state === 'ko') return;
               t.stun = 0; t.frozen = false; t.setState('idle');
               FX.flash('#8affd2', 0.6);
-              Combat.hit(f, t, { dmg: 180, kb: 12, kby: -12, launch: true, unblockable: true, sureHit: true, noScale: true, hitstop: 14, shake: 14, fx: 'soul', type: 'domain', dir: dirTo(f, t) });
+              Combat.hit(f, t, { dmg: 240, kb: 13, kby: -13, launch: true, unblockable: true, sureHit: true, noScale: true, hitstop: 14, shake: 14, fx: 'soul', type: 'domain', dir: dirTo(f, t) });
             },
           });
+        },
+      },
+    },
+    {
+      name: 'Reshaped Servants', icon: '従', color: '#9fd8b8', cost: 30, cd: 420, ai: { min: 0, max: 900 },
+      desc: 'Pinches off three warped servants that lurch toward the opponent and burst on contact. They can be destroyed before they arrive.',
+      move: {
+        id: 'servants', kind: 'special', startup: 14, active: 1, recovery: 18, poses: ['sign', 'cast'],
+        onFrame(f, fr) {
+          if (fr !== 14) return;
+          Sound.play('roar'); FX.smoke(f.x, f.y - 30, '#3a5a4a', 10, 30, 18);
+          for (let i = 0; i < 3; i++) spawnSummon(f, {
+            x: f.x + f.facing * (30 + i * 26), y: FLOOR, life: 260, delay: i * 10, speed: 3.2 + i * 0.6, dir: f.facing,
+            name: 'SERVANT', hp: 40, maxHp: 40, hurtbox: e => ({ x: e.x - 18, y: e.y - 46, w: 36, h: 46 }),
+            tick(e, t) {
+              if (e.age < e.delay || !t || t.state === 'ko') return;
+              e.dir = t.x >= e.x ? 1 : -1;
+              e.x = U.clamp(e.x + e.dir * e.speed, World.left + 10, World.right - 10);
+              if (Math.abs(t.x - e.x) < 34 && t.y > FLOOR - 140) {
+                FX.explosion(e.x, e.y - 24, 40, ['#e0fff0', '#8affd2', '#3a6a5a']); Sound.play('boom');
+                Combat.hit(f, t, { dmg: 32, kb: 7, kby: -7, launch: true, fx: 'soul', x: e.x, y: t.midY, dir: e.dir });
+                e.kill('burst');
+              }
+            },
+            onEnd(e, why) { if (why !== 'burst') FX.smoke(e.x, e.y - 20, '#3a5a4a', 6, 14, 12); },
+            render(ctx, e) {
+              if (e.age < e.delay) return;
+              const wob = Math.sin(e.age * 0.3) * 3;
+              ctx.save(); ctx.translate(e.x, e.y); ctx.scale(e.dir, 1);
+              ctx.fillStyle = '#b7c9bf'; ctx.strokeStyle = '#1a2a22'; ctx.lineWidth = 2.5;
+              ctx.beginPath(); ctx.ellipse(0, -22 + wob * 0.3, 17 + wob, 22 - wob * 0.5, 0.2, 0, 6.283); ctx.fill(); ctx.stroke();
+              ctx.beginPath(); ctx.ellipse(9, -40, 9, 8, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+              ctx.strokeStyle = '#1a2a22'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-8, -4); ctx.lineTo(-10 - wob, 0); ctx.moveTo(8, -4); ctx.lineTo(10 + wob, 0); ctx.stroke();
+              ctx.fillStyle = '#1a2a22'; ctx.fillRect(10, -42, 3, 2); ctx.fillRect(4, -37, 8, 2);
+              ctx.restore();
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Spine Volley', icon: '槍', color: '#c9d3dc', cost: 20, cd: 200, ai: { min: 120, max: 700 },
+      desc: 'Bristles his back and launches a fan of bone-hard spines at the opponent.',
+      move: {
+        id: 'spines', kind: 'special', startup: 12, active: 1, recovery: 16, poses: ['block', 'cast'],
+        onFrame(f, fr) {
+          if (fr !== 12) return;
+          Sound.play('slash');
+          for (let i = 0; i < 5; i++) {
+            const a = (i - 2) * 0.12;
+            spawnProj(f, {
+              x: f.x + f.facing * 26, y: f.y - 105, vx: f.facing * Math.cos(a) * 17, vy: Math.sin(a) * 17, r: 10, life: 60, clash: 1,
+              hits: { dmg: 26, kb: 3, stun: 14, fx: 'slash', color: '#c9d3dc', hitstop: 2, blood: 3 },
+              render(ctx, e) {
+                ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(Math.atan2(e.vy, e.vx));
+                ctx.fillStyle = '#e4ece6'; ctx.strokeStyle = '#2a3a32'; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.moveTo(16, 0); ctx.lineTo(-12, -4); ctx.lineTo(-12, 4); ctx.closePath(); ctx.fill(); ctx.stroke();
+                ctx.restore();
+              },
+            });
+          }
+        },
+      },
+    },
+    {
+      name: 'Gliding Dive', icon: '翼', color: '#8affd2', cost: 25, cd: 260, ai: { min: 150, max: 650 },
+      desc: 'Reshapes his arms into wide membranes, vaults into the air, then dives onto the opponent with a crushing impact.',
+      move: {
+        id: 'dive', kind: 'special', startup: 8, active: 0, recovery: 0, total: 70, keepVel: true,
+        getPose: (f, fr) => (fr < 30 ? POSES.charge : fr < 60 ? POSES.kick : POSES.idle),
+        onFrame(f, fr, t) {
+          if (fr === 8) { f.vy = -17; f.vx = f.facing * 4; f.onGround = false; Sound.play('whoosh'); }
+          if (fr > 8 && fr < 30) {
+            f.vy = Math.min(f.vy, 2);
+            if (t) { f.vx = U.lerp(f.vx, (t.x - f.x) / 12, 0.2); f.facing = t.x >= f.x ? 1 : -1; }
+            if (fr % 3 === 0) FX.ghost(f, '#8affd2');
+          }
+          if (fr === 30) { f.vy = 22; f.vx *= 0.5; Sound.play('dash'); }
+          if (fr >= 30 && fr < 60 && (f.onGround || fr === 59) && !f.mvars.landed) {
+            f.mvars.landed = true;
+            FX.shake(14); FX.dust(f.x, f.y, 16); FX.debris(f.x, f.y, '#5a6a62', 12, 11); Sound.play('boom');
+            for (const v of World.enemies(f)) if (v.state !== 'ko' && Math.abs(v.x - f.x) < 110 && Math.abs(v.y - f.y) < 140)
+              Combat.hit(f, v, { dmg: 85, kb: 10, kby: -12, launch: true, hitstop: 10, fx: 'soul', x: v.x, y: v.midY, dir: v.x >= f.x ? 1 : -1 });
+          }
+          if (f.mvars.landed && fr > 60) f.endMove();
+        },
+      },
+    },
+    {
+      name: 'Soul Mutation', icon: '変', color: '#5fe0b0', cost: 35, cd: 900, ai: { min: 0, max: 600, when: f => !f.buffs.mutate },
+      desc: 'Rewrites his own soul into a battle form for 8 seconds: +30% damage, 25% less damage taken, and half knockback.',
+      move: {
+        id: 'mutate', kind: 'special', startup: 18, active: 1, recovery: 10, poses: ['block', 'win'],
+        onFrame(f, fr) {
+          if (fr !== 18) return;
+          f.buffs.mutate = 480;
+          Sound.play('roar'); FX.shake(10); FX.ring(f.x, f.y - 80, '#8affd2', 110, 22, 6); FX.spark(f.x, f.y - 80, '#5fe0b0', 18, 7);
+          FX.text(f.x, f.y - 195, 'SOUL MUTATION', '#8affd2', 24, 60);
         },
       },
     },
@@ -2455,6 +2565,60 @@ const JIN = {
 
 /* ---------------------------------------------------------------- AYANE KUJO (original) */
 
+// The colossal judge presiding over Ayane's domain (an original design: robed, tall-capped, faceless but for its eyes).
+function drawGiantJudge(ctx, d) {
+  const cx = W / 2, sway = Math.sin(d.age * 0.03) * 4;
+  ctx.save();
+  // robe
+  const rg = ctx.createLinearGradient(0, 160, 0, FLOOR);
+  rg.addColorStop(0, '#1c1814'); rg.addColorStop(1, '#0a0806');
+  ctx.fillStyle = rg; ctx.strokeStyle = 'rgba(201,162,58,0.5)'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(cx - 120, 230); ctx.lineTo(cx + 120, 230); ctx.lineTo(cx + 300, FLOOR); ctx.lineTo(cx - 300, FLOOR); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = 'rgba(201,162,58,0.35)'; ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.moveTo(cx, 240); ctx.lineTo(cx, FLOOR); ctx.stroke();
+  // shoulders and folded sleeves
+  ctx.fillStyle = '#16120e';
+  ctx.beginPath(); ctx.ellipse(cx - 150, 260, 70, 40, -0.3, 0, 6.283); ctx.ellipse(cx + 150, 260, 70, 40, 0.3, 0, 6.283); ctx.fill();
+  // head: a pale featureless mask under a tall square cap
+  ctx.fillStyle = '#d8cbb0'; ctx.strokeStyle = '#0a0806'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.ellipse(cx + sway, 170, 52, 62, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#0e0c08'; ctx.fillRect(cx - 58 + sway, 50, 116, 80); ctx.strokeStyle = '#c9a23a'; ctx.strokeRect(cx - 58 + sway, 50, 116, 80);
+  ctx.fillRect(cx - 74 + sway, 122, 148, 14);
+  // glowing eyes
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = '#ffd34d';
+  ctx.beginPath(); ctx.ellipse(cx - 20 + sway, 172, 9, 4, 0, 0, 6.283); ctx.ellipse(cx + 20 + sway, 172, 9, 4, 0, 0, 6.283); ctx.fill();
+  ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.arc(cx - 20 + sway, 172, 20, 0, 6.283); ctx.arc(cx + 20 + sway, 172, 20, 0, 6.283); ctx.fill();
+  ctx.restore();
+}
+
+// The judge's fist descends on a convicted opponent; it lands 20 frames after being called.
+function judgeFist(t) {
+  const sx = t.x > W / 2 ? W / 2 + 170 : W / 2 - 170;
+  return World.spawn(new Entity({
+    x: sx, y: 220, tx: t.x, ty: t.y - 40, sx, life: 40, layer: 'front', owner: World.domain && World.domain.owner,
+    tick(e) {
+      const k = Math.min(1, e.age / 20) ** 2;
+      e.x = U.lerp(e.sx, e.tx, Math.min(1, e.age / 14)); e.y = U.lerp(-120, e.ty, k);
+      if (e.age === 20) { FX.shake(22); FX.dust(e.tx, FLOOR, 24); FX.debris(e.tx, FLOOR, '#6a5a4a', 20, 14); Sound.play('boom'); }
+    },
+    render(ctx, e) {
+      const fade = Math.min(1, (e.life - e.age) / 10);
+      ctx.save(); ctx.globalAlpha = fade;
+      // sleeve reaching down from the judge's shoulder
+      ctx.strokeStyle = '#0a0806'; ctx.lineWidth = 70; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(e.sx, 160); ctx.lineTo(e.x, e.y - 70); ctx.stroke();
+      ctx.strokeStyle = '#1c1814'; ctx.lineWidth = 60; ctx.stroke();
+      // fist
+      ctx.fillStyle = '#d8cbb0'; ctx.strokeStyle = '#0a0806'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.ellipse(e.x, e.y - 30, 58, 50, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+      ctx.lineWidth = 3;
+      for (let i = -1; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(e.x - 40 + (i + 1) * 22, e.y + 6); ctx.lineTo(e.x - 40 + (i + 1) * 22, e.y - 18); ctx.stroke(); }
+      ctx.restore();
+    },
+  }));
+}
+
 function drawScalesBg(ctx, d, a) {
   ctx.save(); ctx.globalAlpha = a;
   const g = ctx.createLinearGradient(0, 0, 0, H);
@@ -2463,6 +2627,7 @@ function drawScalesBg(ctx, d, a) {
   // columns of a vast, dim hall
   ctx.fillStyle = 'rgba(200,180,120,0.12)';
   for (let i = 0; i < 8; i++) ctx.fillRect(40 + i * 170, 60, 40, FLOOR - 60);
+  drawGiantJudge(ctx, d);
   // a giant balance scale hanging over the arena, tilting with the evidence
   const tilt = Math.sin(d.age * 0.03) * 0.08 + Math.min(0.3, (d.owner.evidence || 0) * 0.03);
   ctx.strokeStyle = '#c9a23a'; ctx.lineWidth = 8;
@@ -2494,7 +2659,7 @@ const AYANE = {
     if (!f.evidence || f.state === 'ko') return;
     const h = headPos(f);
     ctx.save(); ctx.font = '900 14px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#c9a23a';
-    ctx.fillText(`⚖ ${f.evidence}`, h.x, h.y - 52 * f.scale); ctx.restore();
+    ctx.fillText(`⚖ ${f.evidence}`, h.x, h.y - 78 * f.scale); ctx.restore();
   },
   drawHair(g, hx, hy, r) {
     const { ctx, col, OL } = g;
@@ -2512,13 +2677,16 @@ const AYANE = {
     const { ctx, sk, col, OL } = g, e = sk.aF[1], h = sk.aF[2];
     let dx = h[0] - e[0], dy = h[1] - e[1];
     const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
-    const end = [h[0] + dx * 30, h[1] + dy * 30];
-    ctx.strokeStyle = OL; ctx.lineWidth = 6; lineTo2(ctx, h, end);
-    ctx.strokeStyle = col('#6a4a2a'); ctx.lineWidth = 4; lineTo2(ctx, h, end);
+    // Grand Gavel swells the gavel to giant size
+    const fi = g.o.fighter, k = fi && fi.move && fi.move.id === 'grandgavel' ? fi.mvars.g || 0 : 0, big = 1 + 3.2 * k;
+    const end = [h[0] + dx * 30 * (1 + 2 * k), h[1] + dy * 30 * (1 + 2 * k)];
+    ctx.strokeStyle = OL; ctx.lineWidth = 6 + 4 * k; lineTo2(ctx, h, end);
+    ctx.strokeStyle = col('#6a4a2a'); ctx.lineWidth = 4 + 4 * k; lineTo2(ctx, h, end);
     // gavel head across the end of the handle
-    ctx.save(); ctx.translate(end[0], end[1]); ctx.rotate(Math.atan2(dy, dx));
-    ctx.fillStyle = col('#c9a23a'); ctx.strokeStyle = OL; ctx.lineWidth = 2;
+    ctx.save(); ctx.translate(end[0], end[1]); ctx.rotate(Math.atan2(dy, dx)); ctx.scale(big, big);
+    ctx.fillStyle = col('#c9a23a'); ctx.strokeStyle = OL; ctx.lineWidth = 2 / big;
     ctx.fillRect(-6, -14, 12, 28); ctx.strokeRect(-6, -14, 12, 28);
+    if (k > 0 && !g.o.white) { ctx.fillStyle = 'rgba(255,240,180,0.6)'; ctx.fillRect(-6, -14, 3, 28); }
     ctx.restore();
   },
   abilities: [
@@ -2569,7 +2737,7 @@ const AYANE = {
     },
     {
       name: 'Hall of the Scales', icon: '秤', color: '#c9a23a', cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 1280 },
-      desc: 'DOMAIN EXPANSION. Seals the opponent in a vast courtroom. After deliberation, the Verdict lands: 60 damage plus 25 per piece of Evidence, and Ayane recovers 40% of it as restitution.',
+      desc: 'DOMAIN EXPANSION. Seals the opponent in a vast courtroom watched over by a colossal judge. When the verdict is GUILTY, the judge\'s fist comes down: 60 damage plus 25 per piece of Evidence, and Ayane recovers 40% of it as restitution.',
       move: {
         id: 'scales', kind: 'ult', startup: 60, active: 0, recovery: 0, poses: ['sign', 'sign'],
         onStart(f) { f.invuln = 70; domainCutscene(f, 'scales', 'HALL OF THE SCALES'); FX.banner('DOMAIN EXPANSION', 'HALL OF THE SCALES', '#c9a23a', 130); FX.slow(40, 0.35); Sound.play('charge'); },
@@ -2580,6 +2748,7 @@ const AYANE = {
             type: 'scales', life: 200, bg: drawScalesBg,
             onStart(d, t) { t.applyStun(150, true, true); FX.text(t.x, t.y - 185, 'ON TRIAL', '#ffd34d', 24, 70); },
             tick(d, t) {
+              if (d.age === 110 && t && t.state !== 'ko') judgeFist(t);
               if (d.age !== 130 || !t || t.state === 'ko') return;
               const dmg = 60 + 25 * (f.evidence || 0);
               t.stun = 0; t.frozen = false; t.setState('idle');
@@ -2590,6 +2759,22 @@ const AYANE = {
               f.evidence = 0;
             },
           });
+        },
+      },
+    },
+    {
+      name: 'Grand Gavel', icon: '審', color: '#ffd34d', cost: 35, cd: 420, ai: { min: 0, max: 240 },
+      desc: 'The gavel swells to colossal size and comes crashing down in front of her, crushing anyone beneath it and shaking the whole floor.',
+      move: {
+        id: 'grandgavel', kind: 'special', startup: 26, active: 4, recovery: 26, poses: ['slashW', 'slash'],
+        hitbox: { x: 30, y: -270, w: 210, h: 270 }, hit: { dmg: 130, kb: 8, kby: -14, launch: true, hitstop: 14, shake: 18, sfx: 'boom', color: '#ffd34d', guardDmg: 70 },
+        onStart(f) { Sound.play('charge'); FX.text(f.x, f.y - 190, 'ORDER!', '#ffd34d', 24, 40); },
+        onFrame(f, fr) {
+          f.mvars.g = fr <= 26 ? Math.min(1, fr / 22) : Math.max(0, 1 - (fr - 34) / 14);
+          if (fr !== 26) return;
+          const x = f.x + f.facing * 140;
+          FX.shake(18); FX.flash('#ffd34d', 0.25); FX.dust(x, f.y, 22); FX.debris(x, f.y, '#6a5a4a', 18, 13);
+          FX.ring(x, f.y - 8, '#ffd34d', 160, 22, 5); Sound.play('boom');
         },
       },
     },
