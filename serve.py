@@ -114,6 +114,8 @@ def handle_message(client, text):
             return
         host.send({"t": "start", "role": "host", "code": code})
         client.send({"t": "start", "role": "guest", "code": code})
+    elif kind == "ping":
+        pass
     elif client.peer is not None:
         client.peer.send_raw(text)
 
@@ -139,6 +141,14 @@ class GameHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith("/ws") and self.headers.get("Upgrade", "").lower() == "websocket":
             self.serve_websocket()
+        elif self.path.split("?")[0] == "/ws":
+            # plain GET: lets the game check that this server has the relay
+            body = b"relay"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         else:
             super().do_GET()
 

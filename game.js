@@ -657,6 +657,11 @@ function render() {
   }
   if (Game.running && Game.mode !== 'demo') UI.drawHUD(ctx);
   UI.drawOverlays(ctx);
+  if (Net.inMatch && Net.lock.stall > 45) {
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(W / 2 - 220, H / 2 - 30, 440, 60);
+    ctx.font = '800 22px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#ffffff';
+    ctx.fillText('Waiting for opponent…', W / 2, H / 2);
+  }
 }
 
 /* ---------------------------------------------------------------- layout & loop */

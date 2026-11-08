@@ -44,9 +44,24 @@ const Net = {
   ws: null, role: null, code: null, inMatch: false, savedSettings: null,
   via: null,            // 'ws' (serve.py relay) or 'p2p' (direct WebRTC via PeerJS)
   peer: null, conn: null,
-  lock: { tick: 0, delay: 4, local: new Map(), remote: new Map(), rng: null, stall: 0, kb: null, hashes: new Map(), desync: false },
+  lock: {
+    tick: 0, delay: 4, local: new Map(), remote: new Map(), rng: null, stall: 0, kb: null, hashes: new Map(), desync: false,
+    remoteTop() { let k = this.tick; while (this.remote.has(k)) k++; return k; },
+  },
 
   url() { return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws'; },
+
+  // Does this site have the serve.py relay? Answered by a quick HTTP request, so both players on the
+  // same address always pick the same transport (a slow WebSocket handshake used to make one player
+  // silently fall back to peer-to-peer, and the two could then never find each other).
+  hasRelay() {
+    if (this.relayKnown !== undefined) return Promise.resolve(this.relayKnown);
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 4000);
+    return fetch('ws', { cache: 'no-store', signal: ctl.signal })
+      .then(r => r.ok && r.text().then(x => x.trim() === 'relay'))
+      .catch(() => false)
+      .then(ok => { clearTimeout(t); return (this.relayKnown = !!ok); });
+  },
 
   // ---- transport 1: the WebSocket relay built into serve.py (resolves false if it isn't there)
   openRelay() {
@@ -54,12 +69,15 @@ const Net = {
     return new Promise(resolve => {
       let ws, settled = false;
       const finish = ok => { if (settled) return; settled = true; clearTimeout(timer); if (!ok) { try { ws.close(); } catch (e) { /* ignore */ } } resolve(ok); };
-      const timer = setTimeout(() => finish(false), 2500);
+      const timer = setTimeout(() => finish(false), 10000);
       try { ws = new WebSocket(this.url()); } catch (e) { finish(false); return; }
       ws.onopen = () => {
         this.ws = ws; this.via = 'ws';
         ws.onmessage = e => { try { this.onMessage(JSON.parse(e.data)); } catch (err) { /* ignore malformed */ } };
         ws.onclose = () => { if (this.ws === ws) this.onDisconnect(); };
+        // keep idle connections alive through proxies (e.g. Codespaces port forwarding) that drop quiet sockets
+        clearInterval(this.pingT);
+        this.pingT = setInterval(() => { if (this.ws === ws && ws.readyState === 1) ws.send('{"t":"ping"}'); }, 15000);
         finish(true);
       };
       ws.onerror = () => finish(false);
@@ -92,6 +110,12 @@ const Net = {
     this.peer = peer; this.via = 'p2p';
     peer.on('open', () => this.attachConn(peer.connect(PEER_PREFIX + code, { reliable: true, serialization: 'json' }), 'guest', code));
     peer.on('error', e => this.p2pError(e, code));
+    // a direct connection that can't get through a firewall never opens — don't leave the player waiting forever
+    setTimeout(() => {
+      if (this.peer !== peer || this.role) return;
+      peer.destroy(); this.peer = null; this.via = null;
+      UI.onlineStatus(`Couldn't connect to room ${code}. The direct connection may be blocked by one of your networks — try again, or both play on the same address of the dev server (python3 serve.py).`, true);
+    }, 15000);
   },
   attachConn(conn, role, code) {
     this.conn = conn;
@@ -113,6 +137,7 @@ const Net = {
   close() {
     this.endMatch();
     const ws = this.ws, peer = this.peer;
+    clearInterval(this.pingT);
     this.ws = null; this.peer = null; this.conn = null; this.via = null; this.role = null; this.code = null;
     if (ws) try { ws.close(); } catch (e) { /* already closed */ }
     if (peer) try { peer.destroy(); } catch (e) { /* already closed */ }
@@ -121,12 +146,18 @@ const Net = {
 
   // Uses the local relay when it is running, otherwise connects peer-to-peer.
   async create() {
-    if (await this.openRelay()) { this.send({ t: 'create' }); return; }
+    if (await this.hasRelay()) {
+      if (!(await this.openRelay())) throw new Error('Could not connect to the game server. Try again.');
+      this.send({ t: 'create' }); return;
+    }
     await this.loadPeerJs();
     this.p2pHost();
   },
   async join(code) {
-    if (await this.openRelay()) { this.send({ t: 'join', code }); return; }
+    if (await this.hasRelay()) {
+      if (!(await this.openRelay())) throw new Error('Could not connect to the game server. Try again.');
+      this.send({ t: 'join', code }); return;
+    }
     await this.loadPeerJs();
     this.p2pJoin(code);
   },
@@ -138,7 +169,7 @@ const Net = {
       case 'start': this.role = m.role; this.code = m.code; Sound.play('confirm'); Select.open('online'); break;
       case 'sel': Select.remoteSel(m.cur, m.locked); break;
       case 'go': if (this.role === 'guest') this.begin(m); break;
-      case 'i': this.lock.remote.set(m.k, m.c); break;
+      case 'i': this.lock.remote.set(m.k, m.c); if (document.hidden) this.pump(); break;
       case 'h': this.checkHash(m.k, m.v, false); break;
       case 'reselect': if (!this.inMatch) Select.open('online'); break;
       case 'left': this.onPeerLeft(); break;
@@ -204,6 +235,14 @@ const Net = {
       this.checkHash(L.tick, v, true);
     }
     return true;
+  },
+
+  // Browsers stop requestAnimationFrame in background tabs, which used to freeze the match for
+  // BOTH players whenever one switched tabs or minimised. While hidden, each input that arrives
+  // from the opponent drives the simulation forward instead.
+  pump() {
+    if (!this.inMatch || !Game.running) return;
+    for (let n = 0; n < 8 && this.lock.tick < this.lock.remoteTop(); n++) if (!this.tryStep()) break;
   },
 
   stateHash() {
