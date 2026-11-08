@@ -99,6 +99,111 @@ const Sound = {
       case 'heal': [523, 659, 784].forEach((f, i) => S.osc('sine', f, f, 0.3, 0.09, i * 0.07)); break;
       case 'roar': S.osc('sawtooth', 110, 60, 0.7, 0.28); S.noise(0.7, 0.4, 500, 'lowpass', 150); break;
       case 'clash': S.noise(1.0, 0.8, 4000, 'lowpass', 100); S.osc('sine', 800, 50, 1.0, 0.4); break;
+      case 'coin': S.osc('square', 1900, 1900, 0.05, 0.08); S.osc('square', 2500, 2500, 0.18, 0.08, 0.05); break;
+      case 'gunshot': S.noise(0.12, 0.8, 3000, 'lowpass', 300); S.osc('square', 220, 60, 0.08, 0.2); break;
+      case 'cash': [1320, 1760, 2640].forEach((f, i) => S.osc('triangle', f, f, 0.12, 0.08, i * 0.05)); S.noise(0.08, 0.2, 6000, 'highpass'); break;
     }
+  },
+
+  /* ------------------------------------------------------------ domain music
+     A domain spec's `music` names a track; game.js calls syncMusic every frame so the track
+     starts with the domain and stops the moment it ends, however it ends. If an audio file
+     for the track is present (e.g. music/moskau.mp3) it plays that instead of the synth.   */
+
+  track: null, buffers: {},
+
+  syncMusic(name) {
+    if (this.muted || this.volume <= 0) name = null;
+    if ((this.track ? this.track.name : null) === (name || null)) return;
+    this.stopMusic();
+    if (name && this.ac && MUSIC[name]) this.startMusic(name);
+  },
+
+  startMusic(name) {
+    const S = this, ac = S.ac, spec = MUSIC[name];
+    const out = ac.createGain(); out.gain.value = 0.9; out.connect(S.master);
+    const tr = { name, out, step: 0, bpm: spec.bpm, next: ac.currentTime + 0.06, timer: null, src: null };
+    S.track = tr;
+    // step sequencer with a short lookahead
+    tr.timer = setInterval(() => {
+      while (tr.next < ac.currentTime + 0.2) {
+        spec.step(S, tr, tr.step, tr.next);
+        tr.next += 60 / tr.bpm / 4; tr.step++;
+      }
+    }, 40);
+    if (spec.file) S.loadBuffer(spec.file).then(buf => {
+      if (!buf || S.track !== tr) return;
+      clearInterval(tr.timer); tr.timer = null;
+      const src = ac.createBufferSource(); src.buffer = buf; src.loop = true; src.connect(out); src.start();
+      tr.src = src;
+    });
+  },
+
+  stopMusic() {
+    const tr = this.track;
+    if (!tr) return;
+    this.track = null;
+    if (tr.timer) clearInterval(tr.timer);
+    const t = this.ac.currentTime;
+    tr.out.gain.setValueAtTime(tr.out.gain.value, t);
+    tr.out.gain.linearRampToValueAtTime(0, t + 0.25);
+    setTimeout(() => { try { if (tr.src) tr.src.stop(); tr.out.disconnect(); } catch (e) { /* already gone */ } }, 400);
+  },
+
+  loadBuffer(file) {
+    if (file in this.buffers) return Promise.resolve(this.buffers[file]);
+    return fetch(file)
+      .then(r => (r.ok ? r.arrayBuffer() : null))
+      .then(b => (b ? this.ac.decodeAudioData(b) : null))
+      .catch(() => null)
+      .then(buf => (this.buffers[file] = buf));
+  },
+
+  // one scheduled synth note into a track's output
+  note(tr, type, freq, t, dur, vol, f1) {
+    const ac = this.ac, o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+    o.connect(g); g.connect(tr.out); o.start(t); o.stop(t + dur + 0.03);
+  },
+  hiss(tr, t, dur, vol, freq, ftype) {
+    const ac = this.ac, s = ac.createBufferSource(); s.buffer = this.noiseBuf;
+    const f = ac.createBiquadFilter(); f.type = ftype; f.frequency.value = freq;
+    const g = ac.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+    s.connect(f); f.connect(g); g.connect(tr.out); s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.03);
+  },
+};
+
+const hz = semi => 440 * Math.pow(2, semi / 12);   // semitones from A4
+
+const MUSIC = {
+  // An original Russian-disco stomp in A minor: four-on-the-floor kick, octave-bouncing bass,
+  // a balalaika-ish square lead and a shouted "HEY!" — it speeds up every time it loops.
+  // Drop your own copy of the song at music/moskau.mp3 and that will play instead.
+  moskau: {
+    file: 'music/moskau.mp3', bpm: 128,
+    chords: [-12, -12, -7, -5, -4, -2, -5, -12],
+    lead: [
+      [12, 12, 15, 12, 11, null, 12, null], [7, null, 8, 7, 5, 3, 2, null],
+      [5, 5, 8, 5, 3, null, 5, null], [2, null, 3, 2, -1, null, null, null],
+      [8, 8, 12, 8, 7, null, 8, null], [10, null, 12, 10, 7, 5, 3, null],
+      [7, 11, 14, 11, 7, null, 11, null], [12, null, 7, null, 0, null, null, null],
+    ],
+    step(S, tr, i, t) {
+      const s = i % 16, bar = Math.floor(i / 16) % 8, root = this.chords[bar] - 12;
+      if (i > 0 && i % 128 === 0) tr.bpm = Math.min(168, tr.bpm + 6);   // faster every loop
+      if (s % 4 === 0) { S.note(tr, 'sine', 150, t, 0.16, 0.55, 45); S.hiss(tr, t, 0.02, 0.18, 2500, 'lowpass'); }
+      if (s === 4 || s === 12) S.hiss(tr, t, 0.14, 0.32, 1800, 'bandpass');
+      if (s % 4 === 2) S.hiss(tr, t, 0.04, 0.12, 8000, 'highpass');
+      if (s % 2 === 0) S.note(tr, 'sawtooth', hz(root + (s % 4 === 2 ? 12 : 0)), t, 0.12, 0.13);
+      if (s % 2 === 0) {
+        const n = this.lead[bar][s / 2];
+        if (n !== null) { S.note(tr, 'square', hz(n), t, 0.16, 0.07); S.note(tr, 'triangle', hz(n + 12), t, 0.09, 0.05); }
+      }
+      // tremolo strum of the chord on the off-beats
+      if (s % 4 === 3) for (const k of [0, 3, 7]) S.note(tr, 'triangle', hz(this.chords[bar] + 12 + (bar === 3 || bar === 6 ? (k === 3 ? 4 : k) : k)), t, 0.07, 0.025);
+      if (bar === 7 && s === 12) { S.hiss(tr, t, 0.25, 0.45, 900, 'bandpass'); S.note(tr, 'sawtooth', 260, t, 0.22, 0.14, 180); }
+    },
   },
 };

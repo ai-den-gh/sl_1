@@ -3611,10 +3611,548 @@ const CROW = {
   ],
 };
 
+/* ---------------------------------------------------------------- COMMUNISM (original) */
+
+const GOLD = '#ffd34d';
+
+// Crossed hammer and sickle, centred on (x, y); s = 1 spans roughly 22px.
+function drawHammerSickle(ctx, x, y, s, color) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineCap = 'round';
+  // sickle: a crescent blade sweeping over the top, handle down to the lower left
+  ctx.lineWidth = 2.6; ctx.beginPath(); ctx.arc(1, -1, 7.5, 3.5, 1.75); ctx.stroke();
+  ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-1, 6); ctx.lineTo(-7, 11); ctx.stroke();
+  // hammer: handle from the upper left to the lower right, head across the top
+  ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(-4, -3); ctx.lineTo(8, 10); ctx.stroke();
+  ctx.save(); ctx.translate(-4.5, -3.5); ctx.rotate(-Math.PI / 4 - Math.PI / 2); ctx.fillRect(-5.5, -2.2, 11, 4.4); ctx.restore();
+  ctx.restore();
+}
+
+function drawStar(ctx, x, y, r, color, rot = 0) {
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = rot - Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.42 : r;
+    ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+  }
+  ctx.closePath(); ctx.fillStyle = color; ctx.fill();
+}
+
+// Unit vector along the forearm, for drawing held weapons.
+function armDir(arm) {
+  const e = arm[1], h = arm[2], dx = h[0] - e[0], dy = h[1] - e[1], L = Math.hypot(dx, dy) || 1;
+  return Math.atan2(dy / L, dx / L);
+}
+
+function drawSickle(g, h, ang) {
+  const { ctx, col, OL } = g;
+  ctx.save(); ctx.translate(h[0], h[1]); ctx.rotate(ang);
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = OL; ctx.lineWidth = 7; lineTo2(ctx, [-6, 0], [14, 0]);
+  ctx.strokeStyle = col('#d9a520'); ctx.lineWidth = 4; lineTo2(ctx, [-6, 0], [14, 0]);
+  ctx.beginPath(); ctx.moveTo(12, 2);
+  ctx.bezierCurveTo(48, 6, 50, -36, 14, -40);
+  ctx.bezierCurveTo(38, -30, 36, -4, 12, -4); ctx.closePath();
+  ctx.fillStyle = col(GOLD); ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = OL; ctx.stroke();
+  ctx.restore();
+}
+
+function drawHammer(g, h, ang) {
+  const { ctx, col, OL } = g;
+  ctx.save(); ctx.translate(h[0], h[1]); ctx.rotate(ang);
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = OL; ctx.lineWidth = 7; lineTo2(ctx, [-8, 0], [30, 0]);
+  ctx.strokeStyle = col('#d9a520'); ctx.lineWidth = 4; lineTo2(ctx, [-8, 0], [30, 0]);
+  ctx.fillStyle = col(GOLD); ctx.strokeStyle = OL; ctx.lineWidth = 2;
+  ctx.fillRect(26, -14, 13, 28); ctx.strokeRect(26, -14, 13, 28);
+  ctx.restore();
+}
+
+// A little marching worker for Workers Unite!
+const WORKER = {
+  scale: 0.72, hipW: 8, shoulderW: 11,
+  look: { skin: '#d4142a', top: '#b0102a', pants: '#8a0c20', accent: GOLD, shoe: '#4a0610' },
+  drawHair(g, hx, hy, r) {
+    const { ctx, col, OL } = g;
+    ctx.fillStyle = col('#6a5a4a'); ctx.strokeStyle = OL; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(hx, hy - 2, r + 1, Math.PI, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+    if (!g.o.white) drawStar(ctx, hx + 6, hy - 9, 4, '#e0102a');
+  },
+  drawWeapon(g) { drawHammer(g, g.sk.aF[2], armDir(g.sk.aF) - 0.6); },
+};
+
+// Domain backdrop: a red-lit plaza of onion-domed towers under a disco ball and spinning emblem.
+function drawRedSquareBg(ctx, d, a) {
+  ctx.save(); ctx.globalAlpha = a;
+  const beat = (d.age % 28) / 28, pulse = 1 - beat;
+  const g = ctx.createLinearGradient(0, 0, 0, FLOOR);
+  g.addColorStop(0, '#1a0206'); g.addColorStop(0.6, '#6a0614'); g.addColorStop(1, '#b0102a');
+  ctx.fillStyle = g; ctx.fillRect(-30, -30, W + 60, H + 60);
+  // sweeping spotlights
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 5; i++) {
+    const an = Math.PI / 2 + Math.sin(d.age * 0.03 + i * 1.3) * 0.6, x0 = 120 + i * 260;
+    ctx.fillStyle = i % 2 ? 'rgba(255,211,77,0.08)' : 'rgba(255,80,90,0.08)';
+    ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0 + Math.cos(an - 0.12) * 900, Math.sin(an - 0.12) * 900); ctx.lineTo(x0 + Math.cos(an + 0.12) * 900, Math.sin(an + 0.12) * 900); ctx.closePath(); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  // giant hammer and sickle turning slowly in the sky, throbbing on the beat
+  ctx.globalAlpha = a * (0.5 + pulse * 0.25);
+  ctx.save(); ctx.translate(W / 2, 200); ctx.rotate(Math.sin(d.age * 0.02) * 0.15);
+  drawHammerSickle(ctx, 0, 0, 9 + pulse * 0.6, GOLD); ctx.restore();
+  ctx.globalAlpha = a;
+  // disco ball
+  const bx = W / 2, by = 40;
+  ctx.strokeStyle = '#888'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(bx, -10); ctx.lineTo(bx, by - 26); ctx.stroke();
+  ctx.fillStyle = '#c8c8d0'; ctx.beginPath(); ctx.arc(bx, by, 26, 0, 6.283); ctx.fill();
+  for (let i = 0; i < 14; i++) { const sx = bx + ((i * 13 + d.age) % 46) - 23, sy = by - 18 + (i * 7) % 36; ctx.fillStyle = (i + Math.floor(d.age / 6)) % 3 ? '#ffffff' : '#ff9aa8'; ctx.fillRect(sx, sy, 5, 5); }
+  // skyline of generic onion domes and spires
+  ctx.fillStyle = '#2a0408';
+  for (let i = 0; i < 9; i++) {
+    const x = 40 + i * 150, w = 50 + (i * 23) % 30, h = 120 + (i * 47) % 110, top = FLOOR - h;
+    ctx.fillRect(x - w / 2, top, w, h);
+    if (i % 2) { ctx.beginPath(); ctx.moveTo(x - w * 0.55, top); ctx.quadraticCurveTo(x - w * 0.7, top - 40, x, top - 70); ctx.quadraticCurveTo(x + w * 0.7, top - 40, x + w * 0.55, top); ctx.fill(); }
+    else { ctx.beginPath(); ctx.moveTo(x - w * 0.4, top); ctx.lineTo(x, top - 90); ctx.lineTo(x + w * 0.4, top); ctx.fill(); drawStar(ctx, x, top - 98, 10, pulse > 0.6 ? '#ff2a3a' : '#c4122f'); ctx.fillStyle = '#2a0408'; }
+  }
+  // flashing dance floor
+  for (let x = -30, k = 0; x < W + 30; x += 80, k++) {
+    const lit = (k + Math.floor(d.age / 14)) % 3 === 0;
+    ctx.fillStyle = lit ? '#ff3a4a' : k % 2 ? '#5a0610' : '#7a0a18';
+    ctx.fillRect(x, FLOOR, 80, H - FLOOR + 30);
+  }
+  ctx.restore();
+}
+
+// A giant golden hammer or sickle dropping from the sky onto a target.
+function dropRelic(f, t, kind) {
+  spawnProj(f, {
+    x: t.x + U.rand(-20, 20), y: -60, vy: 22, r: 34, life: 60, kind, wallKill: false, spin: Math.random() * 6,
+    hits: { dmg: 30, kb: 3, kby: -6, stun: 18, unblockable: true, sureHit: true, type: 'domain', hitstop: 4, shake: 5, color: GOLD, sfx: 'heavy' },
+    tick(e) { e.spin += 0.3; if (e.y > FLOOR - 30) e.kill('ground'); },
+    onEnd(e) { FX.ring(e.x, FLOOR - 10, GOLD, 70, 14, 4); FX.dust(e.x, FLOOR, 6); FX.spark(e.x, e.y, GOLD, 8, 5); },
+    render(ctx, e) {
+      ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.spin); ctx.scale(1.8, 1.8);
+      const g = { ctx, col: c => c, OL: '#07070c' };
+      if (e.kind === 'hammer') drawHammer(g, [-14, 0], 0); else drawSickle(g, [-14, 10], 0);
+      ctx.restore();
+    },
+  });
+}
+
+const COMMUNISM = {
+  id: 'communism', name: 'Communism', short: 'COMMUNISM', title: 'The Red Comrade', kanji: '同志', color: '#e0102a',
+  style: 'A hard-hitting worker: sickle sweeps, hammer shockwaves, a marching column of comrades and an Iron Curtain that stops projectiles cold.',
+  bio: 'Red from head to toe, with the hammer and sickle stamped across his face. He believes everything should be shared — especially your cursed energy.',
+  passive: { name: 'Seize the Means', desc: 'Every hit Communism lands takes 3 cursed energy from the opponent and redistributes it to him.' },
+  hp: 1050, speed: 0.98, shoulderW: 15, hipW: 11,
+  melee: { weapon: 'sword', weaponName: 'Sickle & Hammer', reach: 18, power: 1.08 },
+  look: { skin: '#d4142a', top: '#c4122f', pants: '#a80e24', accent: GOLD, shoe: '#6a0818' },
+  aiStyle: { pref: 140 },
+  onDealHit(f, t) {
+    if (!t.ce || t.def.noCE) return;
+    const n = Math.min(3, t.ce); t.ce -= n; f.gainCe(n);
+  },
+  drawHead(g) {
+    const { ctx, sk, col, OL, o } = g, [hx, hy] = sk.head, r = LIMB.headR;
+    // ear flap hanging behind the head
+    ctx.fillStyle = col('#6a5a4a'); ctx.strokeStyle = OL; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(hx - 9, hy + 4, 6, 11, 0.2, 0, 6.283); ctx.fill(); ctx.stroke();
+    headCircle(g, hx, hy, r, '#d4142a');
+    if (!o.white && !o.tint) {
+      drawHammerSickle(ctx, hx + 5, hy + 4, 0.62, GOLD);
+      ctx.fillStyle = '#1a0004'; ctx.fillRect(hx + 7, hy - 4, 2.5, 3); ctx.fillRect(hx + 12, hy - 4, 2.2, 3);
+    }
+    // wool hat: fur dome with the front flap folded up
+    ctx.fillStyle = col('#7a6a58'); ctx.strokeStyle = OL; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(hx, hy - 6, r + 2, Math.PI * 1.02, Math.PI * 1.98); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = col('#5a4a3a');
+    ctx.beginPath(); ctx.roundRect(hx - r - 3, hy - 10, r * 2 + 6, 8, 3); ctx.fill(); ctx.stroke();
+    if (!o.white && !o.tint) {
+      drawStar(ctx, hx + 6, hy - 15, 5.5, '#e0102a');
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1;
+      for (let i = -12; i <= 12; i += 4) { ctx.beginPath(); ctx.moveTo(hx + i, hy - 20); ctx.lineTo(hx + i + 2, hy - 26 + Math.abs(i) * 0.4); ctx.stroke(); }
+    }
+  },
+  drawTorso(g) {
+    const { ctx, sk, col } = g;
+    ctx.strokeStyle = col(GOLD); ctx.lineWidth = 2;
+    lineTo2(ctx, [sk.sh[0] - 6, sk.sh[1] + 4], [sk.sh[0] * 0.3 - 6, sk.sh[1] * 0.3]);
+  },
+  // hammer in the left hand (drawn behind the body), sickle in the right
+  drawBack(g) { drawHammer(g, g.sk.aB[2], armDir(g.sk.aB) - 0.4); },
+  drawWeapon(g) { drawSickle(g, g.sk.aF[2], armDir(g.sk.aF) - 0.3); },
+  abilities: [
+    {
+      name: 'Sickle Reap', icon: '鎌', color: GOLD, cost: 12, cd: 120, ai: { min: 0, max: 160 },
+      desc: 'A wide harvesting sweep of the sickle that cuts down anyone in front of him and drags them in close.',
+      move: {
+        id: 'reap', kind: 'special', startup: 8, active: 5, recovery: 14, lunge: 6, poses: ['slashW', 'slash'], sfx: 'swish',
+        hitbox: { x: -10, y: -130, w: 130, h: 120 }, hit: { dmg: 55, kb: -5, stun: 30, fx: 'slash', color: GOLD, hitstop: 6 },
+        onFrame(f, fr) { if (fr === 8) FX.arc(f, { color: GOLD, r: 120, a0: 150, a1: -40, w: 10 }); },
+      },
+    },
+    {
+      name: 'Hammer Drop', icon: '槌', color: GOLD, cost: 18, cd: 180, ai: { min: 0, max: 700 },
+      desc: 'Slams the hammer into the floor, sending a golden shockwave rolling along the ground.',
+      move: {
+        id: 'hammerdrop', kind: 'special', startup: 16, active: 4, recovery: 18, poses: ['heavyW', 'heavy'],
+        hitbox: { x: 10, y: -120, w: 80, h: 120 }, hit: { dmg: 50, kb: 7, kby: -10, launch: true, hitstop: 8, shake: 8, sfx: 'heavy', color: GOLD },
+        onFrame(f, fr) {
+          if (fr !== 16) return;
+          const x = f.x + f.facing * 70;
+          FX.shake(8); FX.dust(x, f.y, 12); FX.ring(x, f.y - 6, GOLD, 70, 14, 4); Sound.play('heavy');
+          spawnProj(f, {
+            x, y: FLOOR - 22, vx: f.facing * 11, r: 24, life: 70, clash: 2,
+            hits: { dmg: 40, kb: 4, kby: -11, launch: true, color: GOLD, hitstop: 5, sfx: 'heavy' },
+            tick(e) { if (e.age % 3 === 0) FX.debris(e.x, FLOOR, '#a0802a', 2, 6); },
+            render(ctx, e) {
+              ctx.save(); ctx.globalCompositeOperation = 'lighter';
+              ctx.strokeStyle = 'rgba(255,211,77,0.85)'; ctx.lineWidth = 6;
+              ctx.beginPath(); ctx.arc(e.x, FLOOR, 30, Math.PI, 0); ctx.stroke();
+              ctx.strokeStyle = 'rgba(255,120,60,0.5)'; ctx.lineWidth = 12; ctx.stroke();
+              ctx.restore();
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Workers Unite!', icon: '団', color: '#ff4d5a', cost: 28, cd: 360, ai: { min: 150, max: 1000 },
+      desc: 'Calls three comrades who march toward the opponent in a column and smash into them with their hammers.',
+      move: {
+        id: 'workers', kind: 'special', startup: 18, active: 1, recovery: 16, poses: ['point', 'win'],
+        onStart(f) { FX.text(f.x, f.y - 190, 'COMRADES!', '#ff4d5a', 26, 50); },
+        onFrame(f, fr) {
+          if (fr !== 18) return;
+          Sound.play('voice');
+          for (let i = 0; i < 3; i++) {
+            const x = f.x - f.facing * (20 + i * 50);
+            FX.smoke(x, f.y - 30, '#5a0610', 5, 14, 12);
+            spawnSummon(f, {
+              x, y: FLOOR - 60, vx: f.facing * 5.5, r: 26, life: 150, facing: f.facing, delay: i * 8, clash: 1,
+              hits: { dmg: 32, kb: 7, kby: -7, stun: 18, color: '#ff4d5a', hitstop: 4, sfx: 'heavy' },
+              tick(e) { if (e.delay > 0) { e.delay--; e.x -= e.vx; } },
+              onEnd(e) { FX.smoke(e.x, e.y, '#5a0610', 6, 16, 14); FX.spark(e.x, e.y, GOLD, 6, 4); },
+              render(ctx, e) {
+                drawStickman(ctx, WORKER, Math.floor(e.age / 6) % 2 ? POSES.walkA : POSES.walkB, e.x, FLOOR, e.facing);
+              },
+            });
+          }
+        },
+      },
+    },
+    {
+      name: 'Red Square Disco', icon: '赤', color: '#e0102a', cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 1280 },
+      desc: 'DOMAIN EXPANSION. The arena becomes a red-lit dance hall under a spinning hammer and sickle, and the music kicks in. On every other beat a giant golden hammer or sickle drops on the opponent, their cursed energy is steadily redistributed to Communism, and the final "HEY!" knocks them flying.',
+      move: {
+        id: 'redsquare', kind: 'ult', startup: 60, active: 0, recovery: 0, poses: ['sign', 'sign'],
+        onStart(f) { f.invuln = 70; domainCutscene(f, 'hands', 'RED SQUARE DISCO'); FX.banner('DOMAIN EXPANSION', 'RED SQUARE DISCO', '#e0102a', 130); FX.slow(40, 0.35); Sound.play('charge'); },
+        onFrame(f, fr) {
+          f.invuln = Math.max(f.invuln, 2);
+          if (fr !== 40) return;
+          Domains.start(f, {
+            type: 'redsquare', life: 420, slowOpp: true, bg: drawRedSquareBg, music: 'moskau',
+            tick(d, t) {
+              if (d.age % 28 === 0) for (let i = 0; i < 6; i++) FX.add({ type: 'glow', x: U.rand(0, W), y: U.rand(-20, 120), vx: U.rand(-1, 1), vy: U.rand(1, 3), life: 60, size: U.rand(5, 9), color: U.pick(['#ff4d5a', GOLD, '#ffffff']), drag: 0.99 });
+              if (!t) return;
+              if (t.ce > 0 && !t.def.noCE) { const n = Math.min(0.12, t.ce); t.ce -= n; f.gainCe(n); }
+              if (d.age % 56 === 20 && d.age < 380) dropRelic(f, t, (d.age / 56 | 0) % 2 ? 'sickle' : 'hammer');
+            },
+            onEnd(d, interrupted) {
+              if (interrupted) return;
+              FX.flash('#ff4d5a', 0.6); FX.shake(20); Sound.play('boom');
+              for (const v of World.enemies(f)) {
+                if (v.state === 'ko') continue;
+                FX.text(v.x, v.y - 200, 'HEY!', GOLD, 48, 70);
+                FX.explosion(v.x, v.midY, 120, ['#ffffff', GOLD, '#e0102a']);
+                Combat.hit(f, v, { dmg: 80, kb: 15, kby: -14, launch: true, unblockable: true, sureHit: true, noScale: true, hitstop: 14, shake: 14, sfx: 'boom', color: GOLD, type: 'domain', x: v.x, y: v.midY, dir: dirTo(f, v) });
+              }
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Iron Curtain', icon: '幕', color: '#9aa0b0', cost: 22, cd: 420, ai: { min: 200, max: 900 },
+      desc: 'Drops a slab of riveted steel in front of him for 3 seconds. It stops projectiles and shoves back anyone who walks into it.',
+      move: {
+        id: 'curtain', kind: 'special', startup: 12, active: 1, recovery: 12, poses: ['castW', 'block'],
+        onFrame(f, fr) {
+          if (fr !== 12) return;
+          const x = f.x + f.facing * 70;
+          FX.shake(10); FX.dust(x, FLOOR, 14); Sound.play('heavy');
+          spawnSummon(f, {
+            x, y: FLOOR - 90, r: 80, life: 180, clash: 6, pierce: true, hitEvery: 20, drop: 0, facing: f.facing,
+            hits: { dmg: 10, kb: 9, kby: -3, stun: 10, color: '#9aa0b0', hitstop: 2, sfx: 'block' },
+            tick(e) { e.drop = Math.min(1, e.drop + 0.12); },
+            onEnd(e) { FX.debris(e.x, FLOOR - 60, '#6a707a', 12, 8); FX.smoke(e.x, FLOOR - 40, '#5a5a62', 6, 20, 16); },
+            render(ctx, e) {
+              const top = FLOOR - 180 * e.drop, a = Math.min(1, (e.life - e.age) / 15);
+              ctx.save(); ctx.globalAlpha = a;
+              ctx.fillStyle = '#4a5058'; ctx.strokeStyle = '#07070c'; ctx.lineWidth = 3;
+              ctx.fillRect(e.x - 16, top, 32, FLOOR - top); ctx.strokeRect(e.x - 16, top, 32, FLOOR - top);
+              ctx.fillStyle = '#8a909a';
+              for (let y = top + 12; y < FLOOR - 6; y += 22) { ctx.beginPath(); ctx.arc(e.x - 9, y, 2.5, 0, 6.283); ctx.arc(e.x + 9, y, 2.5, 0, 6.283); ctx.fill(); }
+              ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(e.x - 14, top + 2, 5, FLOOR - top - 4);
+              ctx.restore();
+            },
+          });
+        },
+      },
+    },
+  ],
+};
+
+/* ---------------------------------------------------------------- CAPITALISM (original) */
+
+function drawBriefcase(g, h, ang) {
+  const { ctx, col, OL } = g;
+  ctx.save(); ctx.translate(h[0], h[1]); ctx.rotate(ang - Math.PI / 2);
+  ctx.strokeStyle = OL; ctx.lineWidth = 2;
+  // handle in the fist, case hanging off it
+  ctx.strokeStyle = col('#2a1a10'); ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(-6, 4); ctx.lineTo(-6, -1); ctx.lineTo(6, -1); ctx.lineTo(6, 4); ctx.stroke();
+  ctx.fillStyle = col('#6a3a1e'); ctx.strokeStyle = OL; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(-17, 4, 34, 24, 3); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = col('#4a2814'); ctx.lineWidth = 1.5; lineTo2(ctx, [-17, 11], [17, 11]);
+  ctx.fillStyle = col(GOLD); ctx.fillRect(-11, 8, 4, 5); ctx.fillRect(7, 8, 4, 5);
+  ctx.restore();
+}
+
+function drawGoldPistol(g, h, ang) {
+  const { ctx, col, OL } = g;
+  ctx.save(); ctx.translate(h[0], h[1]); ctx.rotate(ang);
+  ctx.fillStyle = col(GOLD); ctx.strokeStyle = OL; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(-4, -9, 30, 8, 2); ctx.fill(); ctx.stroke();       // barrel and slide
+  ctx.beginPath(); ctx.moveTo(-3, -2); ctx.lineTo(7, -2); ctx.lineTo(3, 12); ctx.lineTo(-6, 11); ctx.closePath(); ctx.fill(); ctx.stroke();   // grip
+  ctx.fillStyle = col('#fff3b0'); ctx.fillRect(0, -8, 20, 2);
+  ctx.restore();
+}
+
+function drawCoin(ctx, x, y, r, spin) {
+  const w = Math.max(0.25, Math.abs(Math.cos(spin)));
+  ctx.fillStyle = '#d9a520'; ctx.beginPath(); ctx.ellipse(x, y, r * w, r, 0, 0, 6.283); ctx.fill();
+  ctx.fillStyle = GOLD; ctx.beginPath(); ctx.ellipse(x, y, r * w * 0.75, r * 0.75, 0, 0, 6.283); ctx.fill();
+  if (w > 0.6) { ctx.fillStyle = '#a07a10'; ctx.font = `900 ${Math.round(r * 1.2)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('$', x, y + 1); }
+}
+
+function drawBill(ctx, x, y, rot) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+  ctx.fillStyle = '#8fc47a'; ctx.strokeStyle = '#2a5a2a'; ctx.lineWidth = 1.5;
+  ctx.fillRect(-12, -6, 24, 12); ctx.strokeRect(-12, -6, 24, 12);
+  ctx.fillStyle = '#2a5a2a'; ctx.font = '900 9px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('$', 0, 1);
+  ctx.restore();
+}
+
+// Domain backdrop: a trading floor with a scrolling ticker and a stock chart that only goes up.
+function drawBullMarketBg(ctx, d, a) {
+  ctx.save(); ctx.globalAlpha = a;
+  const g = ctx.createLinearGradient(0, 0, 0, FLOOR);
+  g.addColorStop(0, '#04140a'); g.addColorStop(1, '#0e2a18');
+  ctx.fillStyle = g; ctx.fillRect(-30, -30, W + 60, H + 60);
+  // grid
+  ctx.strokeStyle = 'rgba(95,214,90,0.12)'; ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 60) { ctx.beginPath(); ctx.moveTo(x, 60); ctx.lineTo(x, FLOOR); ctx.stroke(); }
+  for (let y = 60; y < FLOOR; y += 60) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  // candlesticks climbing to the top right
+  const n = Math.min(26, Math.floor(d.age / 8));
+  for (let i = 0; i < n; i++) {
+    const x = 40 + i * 48, base = FLOOR - 40 - i * 15 + Math.sin(i * 2.1) * 30, h = 20 + (i * 37) % 40, up = i % 5 !== 3;
+    ctx.fillStyle = up ? '#3fbf4a' : '#d43a3a';
+    ctx.fillRect(x - 1, base - h - 14, 2, h + 28); ctx.fillRect(x - 10, base - h, 20, h);
+  }
+  // the trend line
+  ctx.strokeStyle = '#5fd65a'; ctx.lineWidth = 4; ctx.beginPath();
+  for (let i = 0; i < n; i++) ctx.lineTo(40 + i * 48, FLOOR - 60 - i * 15 + Math.sin(i * 2.1) * 30 - 20);
+  ctx.stroke();
+  // trading floor with a ticker tape running along it
+  ctx.fillStyle = '#1e2a22'; ctx.fillRect(-30, FLOOR, W + 60, H - FLOOR + 30);
+  ctx.fillStyle = '#000'; ctx.fillRect(-30, FLOOR + 14, W + 60, 40);
+  ctx.font = '900 22px "Consolas", monospace'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  const tape = 'GOLD ▲ 12.4%   CASH ▲ 9.1%   BRIEF ▲ 33.0%   COIN ▲ 7.7%   OIL ▲ 4.2%   STAR ▼ 18.9%   ', tw = ctx.measureText(tape).width;
+  for (let x = -((d.age * 3) % tw); x < W; x += tw) {
+    ctx.fillStyle = '#5fd65a'; ctx.fillText(tape, x, FLOOR + 35);
+  }
+  ctx.fillStyle = 'rgba(255,211,77,0.25)'; ctx.fillRect(-30, FLOOR, W + 60, 3);
+  ctx.restore();
+}
+
+function dropGoldBar(f, t) {
+  spawnProj(f, {
+    x: t.x + U.rand(-30, 30), y: -40, vy: 18, r: 26, life: 60, wallKill: false, rot: U.rand(-0.4, 0.4),
+    hits: { dmg: 28, kb: 3, kby: -5, stun: 16, unblockable: true, sureHit: true, type: 'domain', hitstop: 4, shake: 4, color: GOLD, sfx: 'cash' },
+    tick(e) { if (e.y > FLOOR - 16) e.kill('ground'); },
+    onEnd(e) { FX.spark(e.x, e.y, GOLD, 10, 5); FX.dust(e.x, FLOOR, 5); },
+    render(ctx, e) {
+      ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.rot);
+      ctx.fillStyle = '#d9a520'; ctx.strokeStyle = '#6a4a08'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(-26, 12); ctx.lineTo(26, 12); ctx.lineTo(18, -10); ctx.lineTo(-18, -10); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fff3b0'; ctx.fillRect(-14, -7, 20, 3);
+      ctx.restore();
+    },
+  });
+}
+
+const CAPITALISM = {
+  id: 'capitalism', name: 'Capitalism', short: 'CAPITALISM', title: 'The Tycoon', kanji: '資本', color: '#e8b830',
+  style: 'A rich zoner: a lightning-fast gold coin pistol, a raining fortune of bills, and a briefcase that hits like a hostile takeover.',
+  bio: 'A suited tycoon with the stars and stripes for a face and an old-fashioned top hat on top. Every fight is a negotiation, and he always closes.',
+  passive: { name: 'Compound Interest', desc: 'The richer he gets, the richer he gets: Capitalism\'s cursed energy regenerates up to 50% faster the more of it he is holding.' },
+  hp: 1000, speed: 1.0, shoulderW: 16, hipW: 11,
+  melee: { weapon: 'case', weaponName: 'Briefcase', reach: 16, power: 1.05 },
+  look: { skin: '#f0d0b4', top: '#1c2030', pants: '#1c2030', accent: GOLD, shoe: '#0a0a0e' },
+  aiStyle: { pref: 260, ranged: true },
+  passiveTick(f) { if (f.state !== 'ko' && World.active) f.gainCe(0.045 * f.ce / 100); },
+  drawHead(g) {
+    const { ctx, sk, col, OL, o } = g, [hx, hy] = sk.head, r = LIMB.headR;
+    if (o.white || o.tint) headCircle(g, hx, hy, r, '#ffffff');
+    else {
+      // the American flag fills his face
+      ctx.save(); ctx.beginPath(); ctx.arc(hx, hy, r, 0, 6.283); ctx.clip();
+      for (let i = 0; i < 13; i++) { ctx.fillStyle = i % 2 ? '#ffffff' : '#c4122f'; ctx.fillRect(hx - r, hy - r + i * (2 * r / 13), 2 * r, 2 * r / 13 + 0.5); }
+      ctx.fillStyle = '#1e3a8a'; ctx.fillRect(hx - r, hy - r, r * 1.05, r * 1.08);
+      ctx.fillStyle = '#ffffff';
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { ctx.beginPath(); ctx.arc(hx - r + 3 + j * 3.6 + (i % 2) * 1.6, hy - r + 3 + i * 3.6, 0.9, 0, 6.283); ctx.fill(); }
+      ctx.restore();
+      ctx.beginPath(); ctx.arc(hx, hy, r, 0, 6.283); ctx.lineWidth = 3; ctx.strokeStyle = OL; ctx.stroke();
+    }
+    // tall striped top hat with a starry band
+    const by = hy - r + 3;
+    ctx.fillStyle = col('#1e3a8a'); ctx.strokeStyle = OL; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(hx, by, r + 7, 4, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(hx - 11, by - 1); ctx.lineTo(hx - 13, by - 34); ctx.lineTo(hx + 13, by - 34); ctx.lineTo(hx + 11, by - 1); ctx.closePath();
+    ctx.fillStyle = col('#ffffff'); ctx.fill();
+    if (!o.white && !o.tint) {
+      ctx.save(); ctx.clip(); ctx.fillStyle = '#c4122f';
+      for (let x = -13; x < 13; x += 6.5) ctx.fillRect(hx + x, by - 34, 3.2, 34);
+      ctx.fillStyle = '#1e3a8a'; ctx.fillRect(hx - 14, by - 10, 28, 8);
+      for (const sx of [-7, 0, 7]) drawStar(ctx, hx + sx, by - 6, 2.6, '#ffffff');
+      ctx.restore();
+    }
+    ctx.lineWidth = 2; ctx.strokeStyle = OL; ctx.stroke();
+    ctx.fillStyle = col('#ffffff'); ctx.beginPath(); ctx.ellipse(hx, by - 34, 13, 3, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+  },
+  drawTorso(g) {
+    const { ctx, sk, col, OL } = g, [sx, sy] = sk.sh;
+    // white shirt, red tie and lapels on the black suit
+    ctx.fillStyle = col('#f4f4f0');
+    ctx.beginPath(); ctx.moveTo(sx - 6, sy); ctx.lineTo(sx + 6, sy); ctx.lineTo(sx * 0.6, sy * 0.6); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = col('#c4122f'); ctx.strokeStyle = OL; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(sx - 2, sy + 1); ctx.lineTo(sx + 2, sy + 1); ctx.lineTo(sx * 0.62 + 2, sy * 0.62); ctx.lineTo(sx * 0.58, sy * 0.55); ctx.lineTo(sx * 0.62 - 2, sy * 0.62); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = col('#3a4058'); ctx.lineWidth = 2;
+    lineTo2(ctx, [sx - 7, sy + 1], [sx * 0.6 - 2, sy * 0.6]); lineTo2(ctx, [sx + 7, sy + 1], [sx * 0.6 + 2, sy * 0.6]);
+    if (!g.o.white && !g.o.tint) { ctx.fillStyle = GOLD; ctx.beginPath(); ctx.arc(sx * 0.4 + 2, sy * 0.4, 1.6, 0, 6.283); ctx.arc(sx * 0.25 + 2, sy * 0.25, 1.6, 0, 6.283); ctx.fill(); }
+  },
+  // briefcase in hand; the gold pistol comes out for the coin shot and the case moves to the other hand
+  drawWeapon(g) {
+    const fi = g.o.fighter, pistol = fi && fi.state === 'move' && fi.move && fi.move.id === 'coinpistol';
+    if (pistol) { drawGoldPistol(g, g.sk.aF[2], armDir(g.sk.aF)); drawBriefcase(g, g.sk.aB[2], armDir(g.sk.aB)); }
+    else drawBriefcase(g, g.sk.aF[2], armDir(g.sk.aF));
+  },
+  abilities: [
+    {
+      name: 'Gold Coin Pistol', icon: '銃', color: GOLD, cost: 10, cd: 70, ai: { min: 120, max: 1200 },
+      desc: 'Draws a solid-gold pistol and fires a single gold coin at blistering speed straight across the arena.',
+      move: {
+        id: 'coinpistol', kind: 'special', startup: 8, active: 1, recovery: 14, poses: ['point', 'point'],
+        getPose: (f, fr) => { const p = poseCopy(POSES.point); if (fr >= 8 && fr < 14) p.aF[1] -= 25; return p; },
+        onFrame(f, fr) {
+          if (fr !== 8) return;
+          const hp = handPos(f), x = hp.x + f.facing * 26, y = hp.y - 5 * f.scale;
+          Sound.play('gunshot'); Sound.play('coin');
+          FX.glow(x, y, '#fff3b0', 22, 8); FX.spark(x, y, GOLD, 6, 6);
+          spawnProj(f, {
+            x, y, vx: f.facing * 40, r: 9, life: 40, clash: 1, spin: 0,
+            hits: { dmg: 48, kb: 6, kby: -3, stun: 18, color: GOLD, hitstop: 6, sfx: 'coin' },
+            tick(e) { e.spin += 0.6; if (e.age % 2 === 0) FX.add({ type: 'spark', x: e.x, y: e.y, vx: -e.vx * 0.15, vy: 0, life: 8, size: 3, color: GOLD }); },
+            onEnd(e, why) { if (why === 'hit') { FX.text(e.x, e.y - 30, '$$$', GOLD, 22, 40); FX.spark(e.x, e.y, GOLD, 10, 6); } },
+            render(ctx, e) { drawCoin(ctx, e.x, e.y, 9, e.spin); },
+          });
+        },
+      },
+    },
+    {
+      name: 'Briefcase Bash', icon: '鞄', color: '#a0683a', cost: 15, cd: 150, ai: { min: 0, max: 140 },
+      desc: 'A full-body swing of the briefcase that launches the opponent and bursts open in a shower of cash.',
+      move: {
+        id: 'casebash', kind: 'special', startup: 12, active: 4, recovery: 18, lunge: 8, poses: ['slashW', 'slash'], sfx: 'whoosh',
+        hitbox: { x: 0, y: -140, w: 100, h: 90 }, hit: { dmg: 75, kb: 12, kby: -12, launch: true, hitstop: 10, shake: 9, sfx: 'heavy', color: '#a0683a' },
+        onHit(f, t) {
+          Sound.play('cash');
+          for (let i = 0; i < 10; i++) FX.add({ type: 'clover', x: t.x, y: t.midY, vx: U.rand(-6, 6), vy: U.rand(-8, -2), life: 60, size: 6, color: '#8fc47a', grav: 0.15, drag: 0.97, rot: Math.random() * 6, vr: U.rand(-0.2, 0.2) });
+        },
+      },
+    },
+    {
+      name: 'Make It Rain', icon: '札', color: '#8fc47a', cost: 24, cd: 260, ai: { min: 150, max: 1000 },
+      desc: 'Tosses a fortune into the air: razor-crisp bills flutter down over the opponent, each one cutting as it lands.',
+      move: {
+        id: 'makeitrain', kind: 'special', startup: 14, active: 1, recovery: 16, poses: ['castW', 'win'],
+        onFrame(f, fr, t) {
+          if (fr !== 14) return;
+          Sound.play('cash'); FX.text(f.x, f.y - 190, 'MAKE IT RAIN', '#8fc47a', 22, 45);
+          const cx = t ? t.x : f.x + f.facing * 300;
+          for (let i = 0; i < 9; i++) {
+            spawnProj(f, {
+              x: cx + U.rand(-110, 110), y: U.rand(-80, -10), vy: U.rand(4, 6), r: 12, life: 140, wallKill: false, ph: Math.random() * 6, rot: 0,
+              hits: { dmg: 12, kb: 1, stun: 12, noScale: true, hitstop: 1, fx: 'slash', color: '#8fc47a', sfx: 'slash' },
+              tick(e) { e.vx = Math.sin(e.age * 0.12 + e.ph) * 2.5; e.rot = Math.sin(e.age * 0.12 + e.ph) * 0.6; if (e.y > FLOOR - 6) e.kill('ground'); },
+              render(ctx, e) { drawBill(ctx, e.x, e.y, e.rot); },
+            });
+          }
+        },
+      },
+    },
+    {
+      name: 'Infinite Bull Market', icon: '富', color: '#5fd65a', cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 1280 },
+      desc: 'DOMAIN EXPANSION. A trading floor where the chart only goes up. Gold bars rain on the opponent and every one pays Capitalism a 20 HP dividend — then the closing bell rings and the market CRASHES on them.',
+      move: {
+        id: 'bullmarket', kind: 'ult', startup: 60, active: 0, recovery: 0, poses: ['sign', 'sign'],
+        onStart(f) { f.invuln = 70; domainCutscene(f, 'hands', 'INFINITE BULL MARKET'); FX.banner('DOMAIN EXPANSION', 'INFINITE BULL MARKET', '#5fd65a', 130); FX.slow(40, 0.35); Sound.play('charge'); },
+        onFrame(f, fr) {
+          f.invuln = Math.max(f.invuln, 2);
+          if (fr !== 40) return;
+          Domains.start(f, {
+            type: 'bullmarket', life: 360, slowOpp: true, bg: drawBullMarketBg,
+            tick(d, t) {
+              if (!t || d.age % 45 !== 20 || d.age > 320) return;
+              dropGoldBar(f, t);
+              if (f.state !== 'ko') { f.hp = Math.min(f.maxHp, f.hp + 20); FX.text(f.x, f.y - 180, '+20 DIVIDEND', '#5fd65a', 18, 45); }
+            },
+            onEnd(d, interrupted) {
+              if (interrupted) return;
+              FX.flash('#d43a3a', 0.6); FX.shake(22); Sound.play('boom');
+              FX.banner('CLOSING BELL', 'MARKET CRASH', '#d43a3a', 80);
+              for (const v of World.enemies(f)) {
+                if (v.state === 'ko') continue;
+                FX.explosion(v.x, v.midY, 130, ['#ffffff', '#ff8a8a', '#d43a3a']);
+                for (let i = 0; i < 16; i++) FX.add({ type: 'clover', x: v.x, y: v.midY, vx: U.rand(-8, 8), vy: U.rand(-10, 0), life: 70, size: 6, color: '#8fc47a', grav: 0.18, drag: 0.97, rot: Math.random() * 6, vr: U.rand(-0.2, 0.2) });
+                Combat.hit(f, v, { dmg: 110, kb: 14, kby: -14, launch: true, unblockable: true, sureHit: true, noScale: true, hitstop: 16, shake: 16, sfx: 'boom', color: '#d43a3a', type: 'domain', x: v.x, y: v.midY, dir: dirTo(f, v) });
+              }
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Hostile Takeover', icon: '買', color: GOLD, cost: 20, cd: 300, ai: { min: 0, max: 160 },
+      desc: 'Lunges in with an open briefcase and buys the opponent out: steals 30 of their cursed energy and leaves them stunned.',
+      move: {
+        id: 'takeover', kind: 'special', startup: 10, active: 6, recovery: 20, lunge: 12, poses: ['castW', 'cast'], sfx: 'dash',
+        hitbox: { x: 0, y: -130, w: 80, h: 100 }, hit: { dmg: 35, kb: 2, stunAdd: 45, hitstop: 8, color: GOLD, sfx: 'cash' },
+        onHit(f, t) {
+          const n = t.def.noCE ? 0 : Math.min(30, t.ce);
+          t.ce -= n; f.gainCe(n);
+          FX.text(t.x, t.y - 195, 'ACQUIRED', GOLD, 30, 60); FX.spark(t.x, t.midY, GOLD, 12, 6);
+        },
+      },
+    },
+  ],
+};
+
 /* ---------------------------------------------------------------- roster */
 
-const CHARS = { gojo: GOJO, sukuna: SUKUNA, yuji: YUJI, yuta: YUTA, megumi: MEGUMI, g4: CURSE_G4, g3: CURSE_G3, finger: FINGER_BEARER, hanami: HANAMI, jogo: JOGO, mahito: MAHITO, choso: CHOSO, jin: JIN, ayane: AYANE, bao: BAO, daigo: DAIGO, wraith: WRAITH, lantern: LANTERN, crow: CROW };
-const ROSTER = ['yuji', 'gojo', 'sukuna', 'yuta', 'megumi', 'mahito', 'jogo', 'choso', 'jin', 'ayane', 'bao', 'daigo', 'hanami', 'finger', 'g3', 'g4', 'wraith', 'lantern', 'crow'];
+const CHARS = { gojo: GOJO, sukuna: SUKUNA, yuji: YUJI, yuta: YUTA, megumi: MEGUMI, g4: CURSE_G4, g3: CURSE_G3, finger: FINGER_BEARER, hanami: HANAMI, jogo: JOGO, mahito: MAHITO, choso: CHOSO, jin: JIN, ayane: AYANE, bao: BAO, daigo: DAIGO, wraith: WRAITH, lantern: LANTERN, crow: CROW, communism: COMMUNISM, capitalism: CAPITALISM };
+const ROSTER = ['yuji', 'gojo', 'sukuna', 'yuta', 'megumi', 'mahito', 'jogo', 'choso', 'jin', 'ayane', 'bao', 'daigo', 'communism', 'capitalism', 'hanami', 'finger', 'g3', 'g4', 'wraith', 'lantern', 'crow'];
 const CURSE_IDS = [];
 
 /* ---------------------------------------------------------------- Story Mode */

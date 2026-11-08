@@ -693,6 +693,8 @@ function frame(now) {
     }
     Input.age();
   }
+  const dom = World.domain;
+  Sound.syncMusic(Game.running && !Game.paused && Game.mode !== 'demo' && dom ? dom.music : null);
   render();
   UI.renderPreviews();
   requestAnimationFrame(frame);
