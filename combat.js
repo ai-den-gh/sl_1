@@ -1116,47 +1116,28 @@ const Domains = {
   alpha(d) { return Math.min(1, d.age / 25, (d.life - d.age) / 25); },
 };
 
-/* ---------------------------------------------------------------- Domain clash wheel
-   An arrow sweeps around a wheel. Each caster has their own highlighted zone: press the
-   clash key (Space) while the arrow is inside it to score. Missing locks you out briefly
-   and costs a point. First to 3 (or the leader after 9 seconds) keeps their domain.       */
+/* ---------------------------------------------------------------- Domain clash mash-off
+   Both casters hammer their clash key (Space; Enter for player 2) for five seconds.
+   Whoever lands more presses keeps their domain; a dead tie shatters both.            */
 
 const TAU = Math.PI * 2;
 const Clash = {
   start(curDom, owner, spec) {
-    const c = { a: curDom.owner, b: owner, domA: curDom, specB: spec, ang: Math.random() * TAU, spd: 0.065, t: 0, max: 540,
-      score: [0, 0], lock: [0, 0], pop: [0, 0], arcs: [] };
-    c.arcs[0] = this.arc(c.ang + 1.6);
-    c.arcs[1] = this.arc(c.arcs[0].c + Math.PI);
-    World.clash = c;
+    World.clash = { a: curDom.owner, b: owner, domA: curDom, specB: spec, t: 0, max: 300, score: [0, 0], pop: [0, 0] };
     FX.flash('#ffffff', 0.8); FX.shake(16); Sound.play('clash');
   },
-  arc(center) { return { c: ((center % TAU) + TAU) % TAU, w: 0.75 }; },
-  inArc(ang, arc) { const d = ((ang - arc.c) % TAU + TAU * 1.5) % TAU - Math.PI; return Math.abs(d) < arc.w / 2; },
   update() {
     const c = World.clash;
     c.t++;
-    c.ang = (c.ang + c.spd) % TAU;
-    c.spd = Math.min(0.15, c.spd + 0.00012);
     [c.a, c.b].forEach((f, i) => {
       if (c.pop[i] > 0) c.pop[i]--;
-      if (c.lock[i] > 0) { c.lock[i]--; return; }
       if (!(f.input && f.input.pressed && f.input.pressed.clash)) return;
-      if (this.inArc(c.ang, c.arcs[i])) {
-        c.score[i]++; c.pop[i] = 14;
-        c.arcs[i] = this.arc(c.ang + Math.PI * (0.6 + Math.random() * 0.8));
-        c.arcs[i].w = Math.max(0.42, 0.75 - c.score[i] * 0.1);
-        Sound.play('bf'); FX.shake(8);
-      } else {
-        c.score[i] = Math.max(0, c.score[i] - 1); c.lock[i] = 30;
-        Sound.play('block');
-      }
+      c.score[i]++; c.pop[i] = 6;
+      Sound.play('tick');
+      if (c.score[i] % 10 === 0) { Sound.play('bf'); FX.shake(5); }
     });
-    let win = null;
-    if (c.score[0] >= 3) win = 0;
-    else if (c.score[1] >= 3) win = 1;
-    else if (c.t >= c.max) win = c.score[0] === c.score[1] ? -1 : c.score[0] > c.score[1] ? 0 : 1;
-    if (win !== null) this.resolve(win);
+    if (c.t < c.max) return;
+    this.resolve(c.score[0] === c.score[1] ? -1 : c.score[0] > c.score[1] ? 0 : 1);
   },
   resolve(win) {
     const c = World.clash;

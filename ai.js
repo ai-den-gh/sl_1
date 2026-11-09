@@ -23,9 +23,8 @@ class AIController {
     if (!f) return;
     const c = World.clash;
     if (c) {
-      // domain clash wheel: tap when the arrow sits in our zone
-      const i = c.a === f ? 0 : c.b === f ? 1 : -1;
-      if (i >= 0 && !c.lock[i] && Clash.inArc(c.ang + c.spd, c.arcs[i]) && Math.random() < 0.08 + 0.4 * this.level) this.press('clash');
+      // domain clash mash-off: about 4 presses a second on easy up to 11 on the hardest setting
+      if ((c.a === f || c.b === f) && Math.random() < 0.06 + 0.12 * this.level) this.press('clash');
       return;
     }
     if (!o || !World.active || f.state === 'ko' || o.state === 'ko') return;
@@ -33,7 +32,8 @@ class AIController {
     const dx = o.x - f.x, dist = Math.abs(dx);
     const toward = dx >= 0 ? 'right' : 'left', away = dx >= 0 ? 'left' : 'right';
     const style = f.def.aiStyle || {};
-    const reach = (f.moves.basic1.hitbox.x + f.moves.basic1.hitbox.w) * f.scale + 16;
+    // fighters whose basic attack shoots (no melee hitbox) treat it as long range
+    const hb = f.moves.basic1.hitbox, reach = hb ? (hb.x + hb.w) * f.scale + 16 : 600;
     const pref = style.ranged ? style.pref : Math.min(style.pref || 80, reach - 8);
 
     if (f.state === 'move') { this.comboLogic(f, o, L, dist); return; }

@@ -152,7 +152,7 @@ const UI = {
           <button class="nav" data-act="controls"><b>Controls</b><small>Key bindings &amp; tips</small></button>
           <button class="nav" data-act="settings"><b>Settings</b><small>Audio, effects &amp; round rules</small></button>
         </nav>
-        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back · <span class="build">build 18 · ${ROSTER.length} fighters</span></div>
+        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back · <span class="build">build 19 · ${ROSTER.length} fighters</span></div>
       </div>`;
     s.querySelectorAll('[data-act]').forEach(b => { b.onclick = () => this.menuAct(b.dataset.act); });
   },
@@ -362,7 +362,7 @@ const UI = {
       <ul class="tips">
         <li>Chain <kbd>J</kbd> <kbd>J</kbd> <kbd>J</kbd>, then cancel a landed hit into Heavy or any special technique for big combos.</li>
         <li>Dashing grants brief invulnerability — dash <i>through</i> projectiles. Gojo's dash is a teleport.</li>
-        <li>Technique 4 is the Ultimate / Domain Expansion and needs a full 100 cursed energy. Two domains at once will clash and shatter.</li>
+        <li>Technique 4 is the Ultimate / Domain Expansion and needs a full 100 cursed energy. Two domains at once start a Domain Clash: mash your clash key (Space; Enter for player 2) — whoever presses more in 5 seconds keeps their domain.</li>
         <li>Yuji: press Black Flash again the instant his fist flashes red for a true Black Flash.</li>
         <li>In Story Mode and Versus CPU you can use either key set.</li>
       </ul>
@@ -643,49 +643,39 @@ const UI = {
   },
 
   drawClash(ctx, c) {
-    const cx = W / 2, cy = 380, R = 170;
+    const cx = W / 2, cy = 380, total = c.score[0] + c.score[1], share = total ? c.score[0] / total : 0.5;
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(0, 0, W, H);
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.font = 'italic 900 64px Impact, "Arial Black", sans-serif';
     ctx.lineWidth = 8; ctx.strokeStyle = '#000'; ctx.strokeText('DOMAIN CLASH!', cx, 92);
     ctx.fillStyle = '#ffffff'; ctx.fillText('DOMAIN CLASH!', cx, 92);
-    ctx.font = '800 18px "Segoe UI", sans-serif'; ctx.fillStyle = '#ffd34d';
-    ctx.fillText('Press SPACE when the arrow is inside YOUR zone · first to 3', cx, 140);
-    // wheel
-    ctx.fillStyle = '#0c0a18'; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 3; ctx.stroke();
-    for (let i = 0; i < 24; i++) {
-      const a = i / 24 * TAU;
-      ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * (R - 12), cy + Math.sin(a) * (R - 12)); ctx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); ctx.stroke();
-    }
-    [c.a, c.b].forEach((f, i) => {
-      const arc = c.arcs[i], col = f.def.color;
-      ctx.globalAlpha = c.lock[i] ? 0.3 : 1;
-      ctx.strokeStyle = col; ctx.lineWidth = 34 + (c.pop[i] ? 8 : 0);
-      ctx.beginPath(); ctx.arc(cx, cy, R - 30, arc.c - arc.w / 2, arc.c + arc.w / 2); ctx.stroke();
-      ctx.globalAlpha = 1;
-      ctx.font = '900 15px Impact, sans-serif'; ctx.fillStyle = '#fff';
-      ctx.fillText(f.def.short, cx + Math.cos(arc.c) * (R + 26), cy + Math.sin(arc.c) * (R + 26));
-      // score side panels
-      const sx = i === 0 ? cx - 380 : cx + 380;
-      drawPortrait(ctx, f.def, sx, cy - 40, 54, i === 0 ? 1 : -1);
-      ctx.font = '900 26px Impact, sans-serif'; ctx.fillStyle = col; ctx.fillText(`${f.def.short}${f.tag !== 'CPU' ? ' · ' + f.tag : ''}`, sx, cy + 40);
-      for (let k = 0; k < 3; k++) {
-        ctx.beginPath(); ctx.arc(sx - 30 + k * 30, cy + 80, 10, 0, TAU);
-        ctx.fillStyle = c.score[i] > k ? col : 'rgba(255,255,255,0.12)'; ctx.fill();
-        ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
-      }
-      if (c.lock[i]) { ctx.font = '800 16px "Segoe UI", sans-serif'; ctx.fillStyle = '#ff6a6a'; ctx.fillText('MISSED!', sx, cy + 115); }
-    });
-    // the arrow
-    ctx.save(); ctx.translate(cx, cy); ctx.rotate(c.ang);
-    ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(-18, -9); ctx.lineTo(R - 22, 0); ctx.lineTo(-18, 9); ctx.closePath(); ctx.fill(); ctx.stroke();
+    const pulse = 1 + 0.08 * Math.sin(c.t * 0.5);
+    ctx.save(); ctx.translate(cx, 150); ctx.scale(pulse, pulse);
+    ctx.font = '900 30px Impact, "Arial Black", sans-serif'; ctx.fillStyle = '#ffd34d';
+    ctx.fillText(Net.inMatch ? 'MASH SPACE!' : 'MASH IT!  P1: SPACE  ·  P2: ENTER', 0, 0);
     ctx.restore();
-    ctx.beginPath(); ctx.arc(cx, cy, 14, 0, TAU); ctx.fillStyle = '#ffd34d'; ctx.fill();
-    const left = Math.ceil((c.max - c.t) / 60);
-    ctx.font = '800 16px "Segoe UI", sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillText(`${left}s`, cx, cy + R + 40);
+    ctx.font = '700 16px "Segoe UI", sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillText('Most presses in 5 seconds keeps their domain', cx, 186);
+    // tug-of-war bar: each side's share of all presses so far
+    const bw = 560, bx = cx - bw / 2, by = cy - 14, split = bx + bw * share;
+    ctx.fillStyle = c.a.def.color; ctx.fillRect(bx, by, split - bx, 28);
+    ctx.fillStyle = c.b.def.color; ctx.fillRect(split, by, bx + bw - split, 28);
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.strokeRect(bx, by, bw, 28);
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(split, by - 12); ctx.lineTo(split - 9, by - 24); ctx.lineTo(split + 9, by - 24); ctx.closePath(); ctx.fill();
+    ctx.fillRect(split - 2, by - 6, 4, 40);
+    [c.a, c.b].forEach((f, i) => {
+      const sx = i === 0 ? cx - 420 : cx + 420, col = f.def.color, pop = 1 + c.pop[i] * 0.05;
+      drawPortrait(ctx, f.def, sx, cy - 70, 54, i === 0 ? 1 : -1);
+      ctx.font = '900 24px Impact, sans-serif'; ctx.fillStyle = col; ctx.fillText(`${f.def.short}${f.tag !== 'CPU' ? ' · ' + f.tag : ''}`, sx, cy + 6);
+      ctx.save(); ctx.translate(sx, cy + 62); ctx.scale(pop, pop);
+      ctx.font = '900 56px Impact, "Arial Black", sans-serif'; ctx.lineWidth = 6; ctx.strokeStyle = '#000';
+      ctx.strokeText(String(c.score[i]), 0, 0); ctx.fillStyle = '#ffffff'; ctx.fillText(String(c.score[i]), 0, 0);
+      ctx.restore();
+    });
+    const left = Math.max(0, (c.max - c.t) / 60);
+    ctx.font = '900 40px Impact, sans-serif'; ctx.fillStyle = left < 1.5 ? '#ff6a6a' : '#ffffff';
+    ctx.fillText(left.toFixed(1), cx, cy + 80);
     ctx.restore();
   },
 

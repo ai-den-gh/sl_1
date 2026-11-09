@@ -3722,18 +3722,16 @@ function drawRedSquareBg(ctx, d, a) {
   ctx.restore();
 }
 
-// A giant golden hammer or sickle dropping from the sky onto a target.
-function dropRelic(f, t, kind) {
-  spawnProj(f, {
-    x: t.x + U.rand(-20, 20), y: -60, vy: 22, r: 34, life: 60, kind, wallKill: false, spin: Math.random() * 6,
-    hits: { dmg: 30, kb: 3, kby: -6, stun: 18, unblockable: true, sureHit: true, type: 'domain', hitstop: 4, shake: 5, color: GOLD, sfx: 'heavy' },
-    tick(e) { e.spin += 0.3; if (e.y > FLOOR - 30) e.kill('ground'); },
-    onEnd(e) { FX.ring(e.x, FLOOR - 10, GOLD, 70, 14, 4); FX.dust(e.x, FLOOR, 6); FX.spark(e.x, e.y, GOLD, 8, 5); },
+// One comrade in the domain's swarm, sprinting in from the left (side -1) or right (side 1) edge.
+function comradeCharge(f, side) {
+  const k = U.rand(0.85, 1.25), sp = U.rand(9, 13);
+  spawnSummon(f, {
+    x: side < 0 ? -40 : W + 40, y: FLOOR - 60 * k, vx: -side * sp, r: 22 * k, life: Math.ceil((W + 120) / sp), k, facing: -side, wallKill: false,
+    lane: U.randInt(-8, 8), ph: Math.random() * 10, pierce: true,
+    hits: { dmg: 2, kb: 1, kby: -1, stun: 12, unblockable: true, sureHit: true, type: 'domain', noScale: true, hitstop: 0, color: '#ff4d5a', sfx: 'hit' },
+    tick(e) { if ((e.age + (e.ph | 0)) % 9 === 0) FX.dust(e.x, FLOOR, 1); },
     render(ctx, e) {
-      ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.spin); ctx.scale(1.8, 1.8);
-      const g = { ctx, col: c => c, OL: '#07070c' };
-      if (e.kind === 'hammer') drawHammer(g, [-14, 0], 0); else drawSickle(g, [-14, 10], 0);
-      ctx.restore();
+      drawStickman(ctx, WORKER, Math.floor(e.age / 4 + e.ph) % 2 ? POSES.walkA : POSES.walkB, e.x, FLOOR + e.lane, e.facing, { k: e.k });
     },
   });
 }
@@ -3842,7 +3840,7 @@ const COMMUNISM = {
     },
     {
       name: 'Red Square Disco', icon: '赤', color: '#e0102a', cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 1280 },
-      desc: 'DOMAIN EXPANSION. The arena becomes a red-lit dance hall under a spinning hammer and sickle, and the music kicks in. On every other beat a giant golden hammer or sickle drops on the opponent, their cursed energy is steadily redistributed to Communism, and the final "HEY!" knocks them flying.',
+      desc: 'DOMAIN EXPANSION. The arena becomes a red-lit dance hall under a spinning hammer and sickle, and the music kicks in. A massive swarm of comrades charges in from both sides and tramples the opponent again and again, their cursed energy is steadily redistributed to Communism, and the final "HEY!" knocks them flying.',
       move: {
         id: 'redsquare', kind: 'ult', startup: 60, active: 0, recovery: 0, poses: ['sign', 'sign'],
         onStart(f) { f.invuln = 70; domainCutscene(f, 'hands', 'RED SQUARE DISCO'); FX.banner('DOMAIN EXPANSION', 'RED SQUARE DISCO', '#e0102a', 130); FX.slow(40, 0.35); Sound.play('charge'); },
@@ -3855,7 +3853,8 @@ const COMMUNISM = {
               if (d.age % 28 === 0) for (let i = 0; i < 6; i++) FX.add({ type: 'glow', x: U.rand(0, W), y: U.rand(-20, 120), vx: U.rand(-1, 1), vy: U.rand(1, 3), life: 60, size: U.rand(5, 9), color: U.pick(['#ff4d5a', GOLD, '#ffffff']), drag: 0.99 });
               if (!t) return;
               if (t.ce > 0 && !t.def.noCE) { const n = Math.min(0.12, t.ce); t.ce -= n; f.gainCe(n); }
-              if (d.age % 56 === 20 && d.age < 380) dropRelic(f, t, (d.age / 56 | 0) % 2 ? 'sickle' : 'hammer');
+              // a massive swarm of comrades charges in from both edges of the arena
+              if (d.age >= 20 && d.age < 360 && d.age % 6 === 0) for (const side of [-1, 1]) comradeCharge(f, side);
             },
             onEnd(d, interrupted) {
               if (interrupted) return;
@@ -3904,36 +3903,89 @@ const COMMUNISM = {
 
 /* ---------------------------------------------------------------- CAPITALISM (original) */
 
-function drawBriefcase(g, h, ang) {
-  const { ctx, col, OL } = g;
-  ctx.save(); ctx.translate(h[0], h[1]); ctx.rotate(ang - Math.PI / 2);
-  ctx.strokeStyle = OL; ctx.lineWidth = 2;
-  // handle in the fist, case hanging off it
-  ctx.strokeStyle = col('#2a1a10'); ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.moveTo(-6, 4); ctx.lineTo(-6, -1); ctx.lineTo(6, -1); ctx.lineTo(6, 4); ctx.stroke();
-  ctx.fillStyle = col('#6a3a1e'); ctx.strokeStyle = OL; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.roundRect(-17, 4, 34, 24, 3); ctx.fill(); ctx.stroke();
-  ctx.strokeStyle = col('#4a2814'); ctx.lineWidth = 1.5; lineTo2(ctx, [-17, 11], [17, 11]);
-  ctx.fillStyle = col(GOLD); ctx.fillRect(-11, 8, 4, 5); ctx.fillRect(7, 8, 4, 5);
-  ctx.restore();
-}
-
-function drawGoldPistol(g, h, ang) {
+// An AK-47: wooden stock and grip, dark receiver, curved magazine, long barrel with a front sight.
+function drawAK47(g, h, ang, firing) {
   const { ctx, col, OL } = g;
   ctx.save(); ctx.translate(h[0], h[1]); ctx.rotate(ang);
-  ctx.fillStyle = col(GOLD); ctx.strokeStyle = OL; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.roundRect(-4, -9, 30, 8, 2); ctx.fill(); ctx.stroke();       // barrel and slide
-  ctx.beginPath(); ctx.moveTo(-3, -2); ctx.lineTo(7, -2); ctx.lineTo(3, 12); ctx.lineTo(-6, 11); ctx.closePath(); ctx.fill(); ctx.stroke();   // grip
-  ctx.fillStyle = col('#fff3b0'); ctx.fillRect(0, -8, 20, 2);
+  ctx.strokeStyle = OL; ctx.lineWidth = 1.5; ctx.lineJoin = 'round';
+  // stock
+  ctx.fillStyle = col('#8a4a22');
+  ctx.beginPath(); ctx.moveTo(-6, -6); ctx.lineTo(-30, -4); ctx.lineTo(-32, 6); ctx.lineTo(-24, 6); ctx.lineTo(-6, 1); ctx.closePath(); ctx.fill(); ctx.stroke();
+  // receiver
+  ctx.fillStyle = col('#2a2a30');
+  ctx.beginPath(); ctx.rect(-7, -8, 30, 9); ctx.fill(); ctx.stroke();
+  // pistol grip
+  ctx.fillStyle = col('#8a4a22');
+  ctx.beginPath(); ctx.moveTo(-2, 1); ctx.lineTo(4, 1); ctx.lineTo(1, 11); ctx.lineTo(-5, 10); ctx.closePath(); ctx.fill(); ctx.stroke();
+  // curved banana magazine
+  ctx.fillStyle = col('#3a3a42');
+  ctx.beginPath(); ctx.moveTo(8, 1); ctx.lineTo(15, 1); ctx.quadraticCurveTo(19, 9, 22, 16); ctx.lineTo(16, 18); ctx.quadraticCurveTo(12, 9, 8, 1); ctx.closePath(); ctx.fill(); ctx.stroke();
+  // wooden handguard, gas tube and barrel
+  ctx.fillStyle = col('#8a4a22'); ctx.beginPath(); ctx.rect(23, -7, 14, 6); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = col('#2a2a30'); ctx.beginPath(); ctx.rect(23, -10, 22, 3); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.rect(37, -6, 18, 3); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.rect(44, -12, 2, 5); ctx.fill();
+  if (firing && !g.o.white && !g.o.tint) {
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = 'rgba(255,220,120,0.9)';
+    ctx.beginPath(); ctx.moveTo(55, -9); ctx.lineTo(70, -4.5); ctx.lineTo(55, 0); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(255,140,40,0.6)'; ctx.beginPath(); ctx.arc(58, -4.5, 6, 0, 6.283); ctx.fill();
+  }
   ctx.restore();
 }
 
-function drawCoin(ctx, x, y, r, spin) {
-  const w = Math.max(0.25, Math.abs(Math.cos(spin)));
-  ctx.fillStyle = '#d9a520'; ctx.beginPath(); ctx.ellipse(x, y, r * w, r, 0, 0, 6.283); ctx.fill();
-  ctx.fillStyle = GOLD; ctx.beginPath(); ctx.ellipse(x, y, r * w * 0.75, r * 0.75, 0, 0, 6.283); ctx.fill();
-  if (w > 0.6) { ctx.fillStyle = '#a07a10'; ctx.font = `900 ${Math.round(r * 1.2)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('$', x, y + 1); }
+// A whiskey bottle held by the neck; once smashed only the jagged neck is left.
+function drawBottle(g, h, ang, broken) {
+  const { ctx, col, OL } = g;
+  ctx.save(); ctx.translate(h[0], h[1]); ctx.rotate(ang);
+  ctx.strokeStyle = OL; ctx.lineWidth = 1.5;
+  ctx.fillStyle = col('#7a4a1a');
+  ctx.beginPath(); ctx.rect(-3, -3, 12, 6); ctx.fill(); ctx.stroke();                 // neck
+  if (broken) {
+    ctx.beginPath(); ctx.moveTo(9, -5); ctx.lineTo(14, -7); ctx.lineTo(12, -2); ctx.lineTo(17, 0); ctx.lineTo(12, 3); ctx.lineTo(14, 7); ctx.lineTo(9, 5); ctx.closePath(); ctx.fill(); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.moveTo(9, -3); ctx.quadraticCurveTo(13, -9, 18, -9); ctx.lineTo(38, -9); ctx.lineTo(38, 9); ctx.lineTo(18, 9); ctx.quadraticCurveTo(13, 9, 9, 3); ctx.closePath(); ctx.fill(); ctx.stroke();
+    if (!g.o.white && !g.o.tint) {
+      ctx.fillStyle = '#f2e6c8'; ctx.fillRect(21, -6, 11, 12);
+      ctx.fillStyle = '#c4122f'; ctx.font = '900 7px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('XXX', 26.5, 0.5);
+      ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(19, -8, 18, 2);
+    }
+  }
+  ctx.restore();
 }
+
+// One AK-47 round from the muzzle, straight ahead.
+function fireBullet(f, dmg, o = {}) {
+  const sk = skeleton(f.pose), ang = armDir(sk.aF), h = sk.aF[2], drop = poseDrop(f.pose, sk), s = f.scale;
+  const mx = h[0] + Math.cos(ang) * 57 - Math.sin(ang) * -4.5, my = h[1] + Math.sin(ang) * 57 + Math.cos(ang) * -4.5;
+  const x = f.x + mx * f.facing * s, y = f.y + (my - drop) * s;
+  f.muzzleT = 3;
+  Sound.play('gunshot');
+  FX.glow(x, y, '#ffd88a', 16, 5);
+  FX.add({ type: 'debris', x: f.x + h[0] * f.facing * s, y: y - 4, vx: -f.facing * U.rand(2, 4), vy: U.rand(-5, -3), life: 30, size: 3, color: GOLD, grav: 0.4, rot: 0, vr: 0.4 });
+  spawnProj(f, {
+    x, y, vx: f.facing * 34, vy: U.rand(-0.5, 0.5), r: 7, life: 40, clash: 1,
+    hits: Object.assign({ dmg, kb: 1.2, stun: 10, noScale: true, hitstop: 1, color: '#ffd88a', sfx: 'hit' }, o),
+    onEnd(e, why) { if (why === 'hit') FX.spark(e.x, e.y, '#ffd88a', 4, 4); },
+    render(ctx, e) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(255,200,90,0.55)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(e.x - Math.sign(e.vx) * 26, e.y); ctx.lineTo(e.x, e.y); ctx.stroke();
+      ctx.fillStyle = '#fff3c0'; ctx.beginPath(); ctx.ellipse(e.x, e.y, 5, 2, 0, 0, 6.283); ctx.fill();
+      ctx.restore();
+    },
+  });
+}
+
+// A basic attack that shoots instead of punching: fires `shots` rounds `gap` frames apart.
+const gunBasic = (startup, shots, gap, dmg, recovery, last = {}) => ({
+  startup, active: 1, recovery: recovery + (shots - 1) * gap, hitbox: null, hit: null, swing: null, lunge: 0, sfx: null, poses: ['point', 'point'],
+  getPose: () => POSES.point,
+  onFrame(f, fr) {
+    const k = (fr - startup) / (gap || 1);
+    if (fr >= startup && k === Math.floor(k) && k < shots) fireBullet(f, dmg, k === shots - 1 ? last : {});
+  },
+});
 
 function drawBill(ctx, x, y, rot) {
   ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
@@ -3994,14 +4046,24 @@ function dropGoldBar(f, t) {
 
 const CAPITALISM = {
   id: 'capitalism', name: 'Capitalism', short: 'CAPITALISM', title: 'The Tycoon', kanji: '資本', color: '#e8b830',
-  style: 'A rich zoner: a lightning-fast gold coin pistol, a raining fortune of bills, and a briefcase that hits like a hostile takeover.',
+  style: 'A trigger-happy zoner: every basic attack fires his AK-47, he can hold it on full auto, and he has a whiskey bottle for anyone who gets too close.',
   bio: 'A suited tycoon with the stars and stripes for a face and an old-fashioned top hat on top. Every fight is a negotiation, and he always closes.',
   passive: { name: 'Compound Interest', desc: 'The richer he gets, the richer he gets: Capitalism\'s cursed energy regenerates up to 50% faster the more of it he is holding.' },
   hp: 1000, speed: 1.0, shoulderW: 16, hipW: 11,
-  melee: { weapon: 'case', weaponName: 'Briefcase', reach: 16, power: 1.05 },
+  melee: { weapon: 'rifle', weaponName: 'AK-47', reach: 16, power: 1.05 },
+  // basic attacks shoot: a single shot, a double tap, then a three-round burst that knocks back
+  moveOverrides: {
+    basic1: gunBasic(4, 1, 0, 15, 10),
+    basic2: gunBasic(4, 2, 4, 10, 10),
+    basic3: gunBasic(5, 3, 4, 10, 16, { kb: 7, kby: -4, stun: 20 }),
+    air: Object.assign(gunBasic(4, 2, 4, 10, 10), { keepVel: true }),
+  },
   look: { skin: '#f0d0b4', top: '#1c2030', pants: '#1c2030', accent: GOLD, shoe: '#0a0a0e' },
   aiStyle: { pref: 260, ranged: true },
-  passiveTick(f) { if (f.state !== 'ko' && World.active) f.gainCe(0.045 * f.ce / 100); },
+  passiveTick(f) {
+    if (f.muzzleT > 0) f.muzzleT--;
+    if (f.state !== 'ko' && World.active) f.gainCe(0.045 * f.ce / 100);
+  },
   drawHead(g) {
     const { ctx, sk, col, OL, o } = g, [hx, hy] = sk.head, r = LIMB.headR;
     if (o.white || o.tint) headCircle(g, hx, hy, r, '#ffffff');
@@ -4042,43 +4104,39 @@ const CAPITALISM = {
     lineTo2(ctx, [sx - 7, sy + 1], [sx * 0.6 - 2, sy * 0.6]); lineTo2(ctx, [sx + 7, sy + 1], [sx * 0.6 + 2, sy * 0.6]);
     if (!g.o.white && !g.o.tint) { ctx.fillStyle = GOLD; ctx.beginPath(); ctx.arc(sx * 0.4 + 2, sy * 0.4, 1.6, 0, 6.283); ctx.arc(sx * 0.25 + 2, sy * 0.25, 1.6, 0, 6.283); ctx.fill(); }
   },
-  // briefcase in hand; the gold pistol comes out for the coin shot and the case moves to the other hand
+  // always carries the AK-47; for Alcohol Smash it swaps to the off hand while the bottle swings
   drawWeapon(g) {
-    const fi = g.o.fighter, pistol = fi && fi.state === 'move' && fi.move && fi.move.id === 'coinpistol';
-    if (pistol) { drawGoldPistol(g, g.sk.aF[2], armDir(g.sk.aF)); drawBriefcase(g, g.sk.aB[2], armDir(g.sk.aB)); }
-    else drawBriefcase(g, g.sk.aF[2], armDir(g.sk.aF));
+    const fi = g.o.fighter, bottle = fi && fi.state === 'move' && fi.move && fi.move.id === 'bottle';
+    if (bottle) { drawAK47(g, g.sk.aB[2], armDir(g.sk.aB) - 0.8, false); drawBottle(g, g.sk.aF[2], armDir(g.sk.aF), fi.mvars.smashed); }
+    else drawAK47(g, g.sk.aF[2], armDir(g.sk.aF), fi && fi.muzzleT > 0);
   },
   abilities: [
     {
-      name: 'Gold Coin Pistol', icon: '銃', color: GOLD, cost: 10, cd: 70, ai: { min: 120, max: 1200 },
-      desc: 'Draws a solid-gold pistol and fires a single gold coin at blistering speed straight across the arena.',
+      name: 'Full Auto', icon: '銃', color: '#e0b060', cost: 18, cd: 160, ai: { min: 120, max: 1100 },
+      desc: 'Flicks the AK-47 to full auto and opens fire. Hold the key to keep shooting (up to about 1.5 seconds); every bullet lands a quick, light hit.',
       move: {
-        id: 'coinpistol', kind: 'special', startup: 8, active: 1, recovery: 14, poses: ['point', 'point'],
-        getPose: (f, fr) => { const p = poseCopy(POSES.point); if (fr >= 8 && fr < 14) p.aF[1] -= 25; return p; },
+        id: 'ak47', kind: 'special', startup: 8, active: 0, recovery: 0, total: 112, poses: ['point', 'point'],
+        // full auto: keeps firing while the ability key is held, with a minimum burst for a quick tap
+        getPose: (f, fr) => { const p = poseCopy(POSES.point); if (fr >= 8 && fr < 100) p.aF[1] -= fr % 4 < 2 ? 6 : 0; return p; },
         onFrame(f, fr) {
-          if (fr !== 8) return;
-          const hp = handPos(f), x = hp.x + f.facing * 26, y = hp.y - 5 * f.scale;
-          Sound.play('gunshot'); Sound.play('coin');
-          FX.glow(x, y, '#fff3b0', 22, 8); FX.spark(x, y, GOLD, 6, 6);
-          spawnProj(f, {
-            x, y, vx: f.facing * 40, r: 9, life: 40, clash: 1, spin: 0,
-            hits: { dmg: 48, kb: 6, kby: -3, stun: 18, color: GOLD, hitstop: 6, sfx: 'coin' },
-            tick(e) { e.spin += 0.6; if (e.age % 2 === 0) FX.add({ type: 'spark', x: e.x, y: e.y, vx: -e.vx * 0.15, vy: 0, life: 8, size: 3, color: GOLD }); },
-            onEnd(e, why) { if (why === 'hit') { FX.text(e.x, e.y - 30, '$$$', GOLD, 22, 40); FX.spark(e.x, e.y, GOLD, 10, 6); } },
-            render(ctx, e) { drawCoin(ctx, e.x, e.y, 9, e.spin); },
-          });
+          const held = f.input && f.input.held && f.input.held['s' + f.mvars.abil];
+          if (fr >= 100 || (fr >= 32 && !held)) { if (!f.mvars.done) { f.mvars.done = fr; } if (fr - f.mvars.done >= 10) f.endMove(); return; }
+          if (fr >= 8 && fr % 4 === 0) fireBullet(f, 6);
         },
       },
     },
     {
-      name: 'Briefcase Bash', icon: '鞄', color: '#a0683a', cost: 15, cd: 150, ai: { min: 0, max: 140 },
-      desc: 'A full-body swing of the briefcase that launches the opponent and bursts open in a shower of cash.',
+      name: 'Alcohol Smash', icon: '酒', color: '#c08a3a', cost: 15, cd: 170, ai: { min: 0, max: 130 },
+      desc: 'Lunges in and smashes a bottle of whiskey over the opponent\'s head, leaving them dizzy for a moment.',
       move: {
-        id: 'casebash', kind: 'special', startup: 12, active: 4, recovery: 18, lunge: 8, poses: ['slashW', 'slash'], sfx: 'whoosh',
-        hitbox: { x: 0, y: -140, w: 100, h: 90 }, hit: { dmg: 75, kb: 12, kby: -12, launch: true, hitstop: 10, shake: 9, sfx: 'heavy', color: '#a0683a' },
+        id: 'bottle', kind: 'special', startup: 14, active: 4, recovery: 20, lunge: 8, poses: ['slashW', 'slash'], sfx: 'whoosh',
+        hitbox: { x: 0, y: -150, w: 95, h: 80 }, hit: { dmg: 70, kb: 4, kby: -3, stunAdd: 40, hitstop: 12, shake: 9, sfx: 'glass', color: '#c08a3a' },
         onHit(f, t) {
-          Sound.play('cash');
-          for (let i = 0; i < 10; i++) FX.add({ type: 'clover', x: t.x, y: t.midY, vx: U.rand(-6, 6), vy: U.rand(-8, -2), life: 60, size: 6, color: '#8fc47a', grav: 0.15, drag: 0.97, rot: Math.random() * 6, vr: U.rand(-0.2, 0.2) });
+          f.mvars.smashed = true;
+          const y = t.y - 135 * t.scale;
+          FX.text(t.x, y - 50, 'SMASH!', '#ffd88a', 30, 50);
+          FX.debris(t.x, y, '#b0e0c0', 10, 9); FX.debris(t.x, y, '#7a4a1a', 6, 7);
+          for (let i = 0; i < 8; i++) FX.add({ type: 'glow', x: t.x + U.rand(-10, 10), y, vx: U.rand(-3, 3), vy: U.rand(-1, 3), life: 30, size: U.rand(4, 7), color: '#e0a040', grav: 0.15, drag: 0.97 });
         },
       },
     },
@@ -4135,7 +4193,7 @@ const CAPITALISM = {
     },
     {
       name: 'Hostile Takeover', icon: '買', color: GOLD, cost: 20, cd: 300, ai: { min: 0, max: 160 },
-      desc: 'Lunges in with an open briefcase and buys the opponent out: steals 30 of their cursed energy and leaves them stunned.',
+      desc: 'Lunges in waving a fat wad of cash and buys the opponent out: steals 30 of their cursed energy and leaves them stunned.',
       move: {
         id: 'takeover', kind: 'special', startup: 10, active: 6, recovery: 20, lunge: 12, poses: ['castW', 'cast'], sfx: 'dash',
         hitbox: { x: 0, y: -130, w: 80, h: 100 }, hit: { dmg: 35, kb: 2, stunAdd: 45, hitstop: 8, color: GOLD, sfx: 'cash' },
@@ -4300,7 +4358,7 @@ const STORY = [
     id: 'capitalism', title: 'Hostile Takeover', hero: 'capitalism', kanji: '買収',
     blurb: 'A tycoon in a striped top hat sets out to buy the whole jujutsu world, one acquisition at a time.',
     fights: [
-      { enemy: 'g3', diff: 0.3, arena: 'shibuya', text: 'A curse is squatting in prime Shibuya real estate. Evict it — the Gold Coin Pistol is fast, so keep your distance and fire.' },
+      { enemy: 'g3', diff: 0.3, arena: 'shibuya', text: 'A curse is squatting in prime Shibuya real estate. Evict it — hold down the AK-47 and keep your distance.' },
       { enemy: 'bao', diff: 0.46, arena: 'bamboo', text: 'A monastery sits on land you intend to develop. The panda refuses to sell. Make him an offer he can\'t refuse.' },
       { enemy: 'ayane', diff: 0.62, arena: 'court', text: 'The Arbiter has opened an antitrust case against you. Make It Rain on the courtroom, but watch for her Objection.' },
       { enemy: 'communism', diff: 0.82, arena: 'shinjuku', boss: true, text: 'The Red Comrade has come to collectivise everything you own. Ring the bell on the Infinite Bull Market and close the deal.' },
