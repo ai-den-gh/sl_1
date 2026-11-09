@@ -631,6 +631,24 @@ function drawDebug(c) {
   c.restore();
 }
 
+// During a domain clash the screen splits: each caster's domain fills the half they stand on.
+function drawClashDomains(c2d, c) {
+  const aLeft = c.a.x <= c.b.x, seam = W / 2 + Math.sin(c.t * 0.07) * 18;
+  c.views.forEach((v, i) => {
+    if (!v.bg) return;
+    const left = (i === 0) === aLeft;
+    c2d.save(); c2d.beginPath();
+    if (left) c2d.rect(-40, -40, seam + 40, H + 80); else c2d.rect(seam, -40, W - seam + 40, H + 80);
+    c2d.clip(); v.bg(c2d, v, 1); c2d.restore();
+  });
+  // a crackling seam where the two barriers grind against each other
+  c2d.save(); c2d.globalCompositeOperation = 'lighter';
+  c2d.strokeStyle = 'rgba(255,255,255,0.9)'; c2d.lineWidth = 4;
+  c2d.beginPath(); for (let y = -20; y <= H + 20; y += 24) c2d.lineTo(seam + U.rand(-7, 7), y); c2d.stroke();
+  c2d.strokeStyle = 'rgba(255,240,200,0.25)'; c2d.lineWidth = 26; c2d.beginPath(); c2d.moveTo(seam, 0); c2d.lineTo(seam, H); c2d.stroke();
+  c2d.restore();
+}
+
 function render() {
   ctx.setTransform(RS, 0, 0, RS, 0, 0);
   if (!World.arena) { ctx.fillStyle = '#05040a'; ctx.fillRect(0, 0, W, H); return; }
@@ -640,7 +658,8 @@ function render() {
   ctx.drawImage(arenaBackground(World.arena), -20, -20 * H / W, W + 40, H + 40 * H / W);
   if (World.arena.fx) World.arena.fx(ctx, World.frame);
   const d = World.domain;
-  if (d && d.bg) d.bg(ctx, d, Domains.alpha(d));
+  if (World.clash) drawClashDomains(ctx, World.clash);
+  else if (d && d.bg) d.bg(ctx, d, Domains.alpha(d));
   for (const e of World.entities) if (e.layer === 'back') e.draw(ctx);
   const fs = World.fighters.slice().sort((p, q) => (p.state === 'move') - (q.state === 'move'));
   for (const f of fs) f.draw(ctx);

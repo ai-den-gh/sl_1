@@ -152,7 +152,7 @@ const UI = {
           <button class="nav" data-act="controls"><b>Controls</b><small>Key bindings &amp; tips</small></button>
           <button class="nav" data-act="settings"><b>Settings</b><small>Audio, effects &amp; round rules</small></button>
         </nav>
-        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back · <span class="build">build 20 · ${ROSTER.length} fighters</span></div>
+        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back · <span class="build">build 21 · ${ROSTER.length} fighters</span></div>
       </div>`;
     s.querySelectorAll('[data-act]').forEach(b => { b.onclick = () => this.menuAct(b.dataset.act); });
   },
@@ -643,9 +643,13 @@ const UI = {
   },
 
   drawClash(ctx, c) {
-    const cx = W / 2, cy = 380, total = c.score[0] + c.score[1], share = total ? c.score[0] / total : 0.5;
+    // panels and meter sit on the same side as each caster's half of the split screen
+    const L = c.a.x <= c.b.x ? 0 : 1, R = 1 - L, fs = [c.a, c.b];
+    const cx = W / 2, cy = 380, total = c.score[0] + c.score[1], share = total ? c.score[L] / total : 0.5;
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(0, 0, W, H);
+    // light dimming so both halves of the split-screen domains stay visible behind the meter
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(0, 50, W, 150); ctx.fillRect(0, cy - 120, W, 230);
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.font = 'italic 900 64px Impact, "Arial Black", sans-serif';
     ctx.lineWidth = 8; ctx.strokeStyle = '#000'; ctx.strokeText('DOMAIN CLASH!', cx, 92);
@@ -659,14 +663,14 @@ const UI = {
     ctx.fillText('Most presses in 5 seconds keeps their domain', cx, 186);
     // tug-of-war bar: each side's share of all presses so far
     const bw = 560, bx = cx - bw / 2, by = cy - 14, split = bx + bw * share;
-    ctx.fillStyle = c.a.def.color; ctx.fillRect(bx, by, split - bx, 28);
-    ctx.fillStyle = c.b.def.color; ctx.fillRect(split, by, bx + bw - split, 28);
+    ctx.fillStyle = fs[L].def.color; ctx.fillRect(bx, by, split - bx, 28);
+    ctx.fillStyle = fs[R].def.color; ctx.fillRect(split, by, bx + bw - split, 28);
     ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.strokeRect(bx, by, bw, 28);
     ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(split, by - 12); ctx.lineTo(split - 9, by - 24); ctx.lineTo(split + 9, by - 24); ctx.closePath(); ctx.fill();
     ctx.fillRect(split - 2, by - 6, 4, 40);
-    [c.a, c.b].forEach((f, i) => {
-      const sx = i === 0 ? cx - 420 : cx + 420, col = f.def.color, pop = 1 + c.pop[i] * 0.05;
-      drawPortrait(ctx, f.def, sx, cy - 70, 54, i === 0 ? 1 : -1);
+    fs.forEach((f, i) => {
+      const onLeft = i === L, sx = onLeft ? cx - 420 : cx + 420, col = f.def.color, pop = 1 + c.pop[i] * 0.05;
+      drawPortrait(ctx, f.def, sx, cy - 70, 54, onLeft ? 1 : -1);
       ctx.font = '900 24px Impact, sans-serif'; ctx.fillStyle = col; ctx.fillText(`${f.def.short}${f.tag !== 'CPU' ? ' · ' + f.tag : ''}`, sx, cy + 6);
       ctx.save(); ctx.translate(sx, cy + 62); ctx.scale(pop, pop);
       ctx.font = '900 56px Impact, "Arial Black", sans-serif'; ctx.lineWidth = 6; ctx.strokeStyle = '#000';

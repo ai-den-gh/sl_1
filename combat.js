@@ -80,6 +80,8 @@ const World = {
     if (this.clash) {
       for (const f of this.fighters) if (f.input && f.input.update) f.input.update();
       Clash.update(); updateParticles();
+      if (this.shake > 0) { this.shake *= 0.86; if (this.shake < 0.3) this.shake = 0; }
+      if (this.flash > 0) this.flash = Math.max(0, this.flash - 0.05);
       return false;
     }
     if (this.hitstop > 0) { this.hitstop--; updateParticles(); return false; }
@@ -1123,12 +1125,15 @@ const Domains = {
 const TAU = Math.PI * 2;
 const Clash = {
   start(curDom, owner, spec) {
-    World.clash = { a: curDom.owner, b: owner, domA: curDom, specB: spec, t: 0, max: 300, score: [0, 0], pop: [0, 0] };
+    World.clash = { a: curDom.owner, b: owner, domA: curDom, specB: spec, t: 0, max: 300, score: [0, 0], pop: [0, 0],
+      // display-only copies of both domains for the split-screen backdrop (the real ones stay untouched)
+      views: [Object.assign(Object.create(curDom), { age: curDom.age, life: Infinity }), Object.assign({ owner, age: 0 }, spec, { life: Infinity })] };
     FX.flash('#ffffff', 0.8); FX.shake(16); Sound.play('clash');
   },
   update() {
     const c = World.clash;
     c.t++;
+    for (const v of c.views) v.age++;
     [c.a, c.b].forEach((f, i) => {
       if (c.pop[i] > 0) c.pop[i]--;
       if (!(f.input && f.input.pressed && f.input.pressed.clash)) return;
