@@ -4286,5 +4286,24 @@ const STORY = [
       { enemy: 'wraith', diff: 0.6, arena: 'womb', text: 'The parade route floods with black bog water. Don\'t get dragged under — stay airborne.' },
       { enemy: 'finger', diff: 0.8, arena: 'shinjuku', boss: true, text: 'Something huge has joined the parade uninvited. Burn it down before it reaches the city.' },
     ],
+  },  {
+    id: 'communism', title: 'Workers of the World', hero: 'communism', kanji: '革命',
+    blurb: 'A red comrade marches on the city to seize the means of cursed energy — and share it with everyone.',
+    fights: [
+      { enemy: 'g4', diff: 0.3, arena: 'festival', text: 'A lesser curse is hoarding the festival\'s lanterns all to itself. Redistribute them. With the hammer.' },
+      { enemy: 'daigo', diff: 0.46, arena: 'casino', text: 'A gambler is running an underground casino on the backs of the workers. Every hit you land takes his cursed energy for the people.' },
+      { enemy: 'jin', diff: 0.62, arena: 'bamboo', text: 'A mercenary who sells his sword to the highest bidder. Raise the Iron Curtain against his reach and let the comrades march.' },
+      { enemy: 'capitalism', diff: 0.82, arena: 'shinjuku', boss: true, text: 'The Tycoon himself, guarding his fortune at the top of the city. Open Red Square Disco and let the music play.' },
+    ],
+  },
+  {
+    id: 'capitalism', title: 'Hostile Takeover', hero: 'capitalism', kanji: '買収',
+    blurb: 'A tycoon in a striped top hat sets out to buy the whole jujutsu world, one acquisition at a time.',
+    fights: [
+      { enemy: 'g3', diff: 0.3, arena: 'shibuya', text: 'A curse is squatting in prime Shibuya real estate. Evict it — the Gold Coin Pistol is fast, so keep your distance and fire.' },
+      { enemy: 'bao', diff: 0.46, arena: 'bamboo', text: 'A monastery sits on land you intend to develop. The panda refuses to sell. Make him an offer he can\'t refuse.' },
+      { enemy: 'ayane', diff: 0.62, arena: 'court', text: 'The Arbiter has opened an antitrust case against you. Make It Rain on the courtroom, but watch for her Objection.' },
+      { enemy: 'communism', diff: 0.82, arena: 'shinjuku', boss: true, text: 'The Red Comrade has come to collectivise everything you own. Ring the bell on the Infinite Bull Market and close the deal.' },
+    ],
   },
 ];
