@@ -3736,15 +3736,39 @@ function comradeCharge(f, side) {
   });
 }
 
+// A bottle of vodka held in the fist, neck tipped toward `ang` (his mouth, while he drinks).
+function drawVodka(g, h, ang) {
+  const { ctx, col, OL } = g;
+  ctx.save(); ctx.translate(h[0], h[1]); ctx.rotate(ang);
+  ctx.strokeStyle = OL; ctx.lineWidth = 1.5;
+  ctx.fillStyle = col('#dceef4');
+  ctx.beginPath(); ctx.moveTo(4, -2.5); ctx.lineTo(13, -2.5); ctx.lineTo(13, 2.5); ctx.lineTo(4, 2.5); ctx.quadraticCurveTo(0, 7, -4, 7);
+  ctx.lineTo(-24, 7); ctx.lineTo(-24, -7); ctx.lineTo(-4, -7); ctx.quadraticCurveTo(0, -7, 4, -2.5); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = col('#e0102a'); ctx.fillRect(13, -3, 3, 6);                      // cap
+  if (!g.o.white && !g.o.tint) {
+    ctx.fillStyle = '#e0102a'; ctx.fillRect(-19, -5, 11, 10);                    // label
+    drawStar(ctx, -13.5, 0, 3.2, GOLD);
+    ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillRect(-22, -6, 18, 1.5);
+  }
+  ctx.restore();
+}
+
+const DRINK_POSE = { lean: -6, aF: [115, 105], aB: [12, 125], lF: [16, -18], lB: [-14, -6] };
+
 const COMMUNISM = {
   id: 'communism', name: 'Communism', short: 'COMMUNISM', title: 'The Red Comrade', kanji: '同志', color: '#e0102a',
-  style: 'A hard-hitting worker: sickle sweeps, hammer shockwaves, a marching column of comrades and an Iron Curtain that stops projectiles cold.',
+  style: 'A hard-hitting worker: sickle sweeps, hammer shockwaves, a marching column of comrades, an Iron Curtain that stops projectiles cold, and a bottle of vodka for courage.',
   bio: 'Red from head to toe, with the hammer and sickle stamped across his face. He believes everything should be shared — especially your cursed energy.',
   passive: { name: 'Seize the Means', desc: 'Every hit Communism lands takes 3 cursed energy from the opponent and redistributes it to him.' },
   hp: 1050, speed: 0.98, shoulderW: 15, hipW: 11,
   melee: { weapon: 'sword', weaponName: 'Sickle & Hammer', reach: 18, power: 1.08 },
   look: { skin: '#d4142a', top: '#c4122f', pants: '#a80e24', accent: GOLD, shoe: '#6a0818' },
   aiStyle: { pref: 140 },
+  dmgMult(f) { return f.buffs.vodka ? 1.2 : 1; },
+  onIncoming(f, dmg) { return { dmg: f.buffs.vodka ? dmg * 0.85 : dmg }; },
+  passiveTick(f) {
+    if (f.buffs.vodka && f.state !== 'ko' && f.anim % 90 === 0) FX.text(f.x + f.facing * 20, f.y - 175 * f.scale, 'hic!', '#ffb0b8', 16, 35);
+  },
   onDealHit(f, t) {
     if (!t.ce || t.def.noCE) return;
     const n = Math.min(3, t.ce); t.ce -= n; f.gainCe(n);
@@ -3775,9 +3799,15 @@ const COMMUNISM = {
     ctx.strokeStyle = col(GOLD); ctx.lineWidth = 2;
     lineTo2(ctx, [sk.sh[0] - 6, sk.sh[1] + 4], [sk.sh[0] * 0.3 - 6, sk.sh[1] * 0.3]);
   },
-  // hammer in the left hand (drawn behind the body), sickle in the right
+  // hammer in the left hand (drawn behind the body), sickle in the right — swapped for a bottle while he drinks
   drawBack(g) { drawHammer(g, g.sk.aB[2], armDir(g.sk.aB) - 0.4); },
-  drawWeapon(g) { drawSickle(g, g.sk.aF[2], armDir(g.sk.aF) - 0.3); },
+  drawWeapon(g) {
+    const fi = g.o.fighter, sk = g.sk;
+    if (fi && fi.state === 'move' && fi.move && fi.move.id === 'vodka' && fi.mf < 50) {
+      const h = sk.aF[2], mouth = [sk.head[0] + 9, sk.head[1] + 6];
+      drawVodka(g, h, Math.atan2(mouth[1] - h[1], mouth[0] - h[0]));
+    } else drawSickle(g, sk.aF[2], armDir(sk.aF) - 0.3);
+  },
   abilities: [
     {
       name: 'Sickle Reap', icon: '鎌', color: GOLD, cost: 12, cd: 120, ai: { min: 0, max: 160 },
@@ -3892,6 +3922,43 @@ const COMMUNISM = {
               ctx.fillStyle = '#8a909a';
               for (let y = top + 12; y < FLOOR - 6; y += 22) { ctx.beginPath(); ctx.arc(e.x - 9, y, 2.5, 0, 6.283); ctx.arc(e.x + 9, y, 2.5, 0, 6.283); ctx.fill(); }
               ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(e.x - 14, top + 2, 5, FLOOR - top - 4);
+              ctx.restore();
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Vodka', icon: '酔', color: '#dceef4', cost: 20, cd: 480, ground: true, ai: { min: 0, max: 220 },
+      desc: 'Knocks back a bottle of vodka: heals 80 and, for 7 seconds, deals 20% more damage and takes 15% less. Then sprays the last mouthful out as a burst of flame that sets the opponent on fire.',
+      move: {
+        id: 'vodka', kind: 'special', startup: 0, active: 0, recovery: 0, total: 82, poses: ['idle', 'idle'],
+        getPose: (f, fr) => (fr < 8 ? POSES.castW : fr < 46 ? DRINK_POSE : fr < 52 ? POSES.heavyW : fr < 72 ? POSES.cast : POSES.idle),
+        onFrame(f, fr) {
+          if (fr >= 10 && fr < 46) {
+            f.hp = Math.min(f.maxHp, f.hp + 80 / 36);
+            if (fr % 9 === 1) Sound.play('glug');
+            if (fr === 12) FX.text(f.x, f.y - 190 * f.scale, 'glug glug', '#dceef4', 18, 40);
+          }
+          if (fr === 46) {
+            f.buffs.vodka = 420;
+            FX.text(f.x, f.y - 195 * f.scale, 'ZA ZDOROVYE!', '#ff4d5a', 24, 55);
+            FX.ring(f.x, f.y - 90 * f.scale, '#ff4d5a', 90, 18, 4);
+          }
+          if (fr < 52 || fr >= 70 || fr % 2) return;
+          // the fire spray
+          if (fr === 52) Sound.play('fire');
+          const h = headPos(f), x = h.x + f.facing * 14 * f.scale, y = h.y + 6 * f.scale;
+          spawnProj(f, {
+            x, y, vx: f.facing * U.rand(9, 12), vy: U.rand(-1.6, 1.2), r: 16, life: 22, grow: 0,
+            hits: { dmg: 6, kb: 1.5, stun: 10, noScale: true, hitstop: 1, fx: 'fire', color: '#ff9a2a', sfx: 'fire' },
+            onHit(e, t) { t.buffs.burn = Math.max(t.buffs.burn || 0, 150); },
+            tick(e) { e.r = 16 + e.age * 0.8; if (e.age % 3 === 0) FX.glow(e.x, e.y, U.pick(['#ff9a2a', '#ffd34d', '#ff5a1a']), 10, 12, e.vx * 0.2, -1); },
+            render(ctx, e) {
+              const a = 1 - e.age / e.life;
+              ctx.save(); ctx.globalCompositeOperation = 'lighter';
+              ctx.globalAlpha = a * 0.55; ctx.fillStyle = '#ff5a1a'; ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, 6.283); ctx.fill();
+              ctx.globalAlpha = a * 0.8; ctx.fillStyle = '#ffd34d'; ctx.beginPath(); ctx.arc(e.x, e.y, e.r * 0.5, 0, 6.283); ctx.fill();
               ctx.restore();
             },
           });

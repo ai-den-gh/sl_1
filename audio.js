@@ -101,6 +101,7 @@ const Sound = {
       case 'clash': S.noise(1.0, 0.8, 4000, 'lowpass', 100); S.osc('sine', 800, 50, 1.0, 0.4); break;
       case 'gunshot': S.noise(0.12, 0.8, 3000, 'lowpass', 300); S.osc('square', 220, 60, 0.08, 0.2); break;
       case 'glass': S.noise(0.3, 0.6, 5000, 'highpass'); [2600, 3400, 4100].forEach((f, i) => S.osc('triangle', f, f * 0.9, 0.2, 0.06, i * 0.03)); S.osc('sine', 160, 60, 0.15, 0.3); break;
+      case 'glug': S.osc('sine', 220, 140, 0.09, 0.2); S.osc('sine', 180, 110, 0.09, 0.16, 0.1); break;
       case 'cash': [1320, 1760, 2640].forEach((f, i) => S.osc('triangle', f, f, 0.12, 0.08, i * 0.05)); S.noise(0.08, 0.2, 6000, 'highpass'); break;
     }
   },
