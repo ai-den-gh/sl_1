@@ -152,7 +152,7 @@ const UI = {
           <button class="nav" data-act="controls"><b>Controls</b><small>Key bindings &amp; tips</small></button>
           <button class="nav" data-act="settings"><b>Settings</b><small>Audio, effects &amp; round rules</small></button>
         </nav>
-        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back · <span class="build">build 21 · ${ROSTER.length} fighters</span></div>
+        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back · <span class="build">build 22 · ${ROSTER.length} fighters</span></div>
       </div>`;
     s.querySelectorAll('[data-act]').forEach(b => { b.onclick = () => this.menuAct(b.dataset.act); });
   },
@@ -644,7 +644,7 @@ const UI = {
 
   drawClash(ctx, c) {
     // panels and meter sit on the same side as each caster's half of the split screen
-    const L = c.a.x <= c.b.x ? 0 : 1, R = 1 - L, fs = [c.a, c.b];
+    const L = c.aLeft ? 0 : 1, R = 1 - L, fs = [c.a, c.b];
     const cx = W / 2, cy = 380, total = c.score[0] + c.score[1], share = total ? c.score[L] / total : 0.5;
     ctx.save();
     // light dimming so both halves of the split-screen domains stay visible behind the meter

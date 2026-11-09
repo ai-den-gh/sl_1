@@ -633,7 +633,7 @@ function drawDebug(c) {
 
 // During a domain clash the screen splits: each caster's domain fills the half they stand on.
 function drawClashDomains(c2d, c) {
-  const aLeft = c.a.x <= c.b.x, seam = W / 2 + Math.sin(c.t * 0.07) * 18;
+  const aLeft = c.aLeft, seam = W / 2 + Math.sin(c.t * 0.07) * 18;
   c.views.forEach((v, i) => {
     if (!v.bg) return;
     const left = (i === 0) === aLeft;

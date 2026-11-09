@@ -1125,7 +1125,13 @@ const Domains = {
 const TAU = Math.PI * 2;
 const Clash = {
   start(curDom, owner, spec) {
-    World.clash = { a: curDom.owner, b: owner, domA: curDom, specB: spec, t: 0, max: 300, score: [0, 0], pop: [0, 0],
+    // each caster takes the half of the screen they were on and stands in the middle of it, facing the other
+    const aLeft = curDom.owner.x <= owner.x;
+    for (const [f, left] of [[curDom.owner, aLeft], [owner, !aLeft]]) {
+      f.x = left ? W / 4 : W * 3 / 4; f.vx = 0; f.facing = left ? 1 : -1;
+      FX.smoke(f.x, f.y - 40, '#ffffff', 6, 20, 16);
+    }
+    World.clash = { a: curDom.owner, b: owner, domA: curDom, specB: spec, t: 0, max: 300, score: [0, 0], pop: [0, 0], aLeft,
       // display-only copies of both domains for the split-screen backdrop (the real ones stay untouched)
       views: [Object.assign(Object.create(curDom), { age: curDom.age, life: Infinity }), Object.assign({ owner, age: 0 }, spec, { life: Infinity })] };
     FX.flash('#ffffff', 0.8); FX.shake(16); Sound.play('clash');
