@@ -380,6 +380,267 @@ const ARENAS = [
       }
     },
   },
+  {
+    id: 'whitehouse', name: 'The Big White House', sub: 'South Lawn · Fourth of July', platforms: [{ x: 170, y: 440, w: 220 }, { x: 890, y: 440, w: 220 }],
+    draw(c) {
+      const sky = c.createLinearGradient(0, 0, 0, FLOOR);
+      sky.addColorStop(0, '#0a1030'); sky.addColorStop(0.6, '#3a3a7a'); sky.addColorStop(1, '#c86a6a');
+      c.fillStyle = sky; c.fillRect(0, 0, W, H);
+      const r = seeded(23);
+      c.fillStyle = '#fff'; for (let i = 0; i < 50; i++) c.fillRect(r() * W, r() * 220, 1.4, 1.4);
+      // the mansion: two long wings around a domed, columned portico
+      const wall = '#f4f2ea', shade = '#d8d4c8';
+      c.fillStyle = wall; c.fillRect(90, 300, 1100, 280);
+      c.fillStyle = shade; c.fillRect(90, 300, 1100, 12); c.fillRect(90, 420, 1100, 8);
+      // rooftop balustrade
+      c.fillStyle = wall; c.fillRect(80, 284, 1120, 16);
+      c.fillStyle = shade; for (let x = 92; x < 1190; x += 16) c.fillRect(x, 270, 8, 16);
+      c.fillStyle = wall; c.fillRect(80, 264, 1120, 8);
+      // rows of tall windows, warmly lit
+      for (const y of [330, 450]) for (let x = 120; x < 1170; x += 70) {
+        if (x > 440 && x < 830) continue;
+        c.fillStyle = '#5a4a3a'; c.fillRect(x - 2, y - 2, 34, 58);
+        c.fillStyle = r() < 0.75 ? '#ffd890' : '#4a5a7a'; c.fillRect(x, y, 30, 54);
+        c.strokeStyle = '#5a4a3a'; c.lineWidth = 2; c.beginPath(); c.moveTo(x + 15, y); c.lineTo(x + 15, y + 54); c.moveTo(x, y + 27); c.lineTo(x + 30, y + 27); c.stroke();
+        c.fillStyle = shade; c.beginPath(); c.moveTo(x - 6, y - 4); c.lineTo(x + 15, y - 16); c.lineTo(x + 36, y - 4); c.closePath(); c.fill();
+      }
+      // the bowed portico: a curved roof, six great columns and a curved balcony between them
+      c.fillStyle = '#e8e4d8'; c.beginPath(); c.ellipse(640, 300, 200, 40, 0, Math.PI, 0); c.fill();
+      c.fillStyle = wall; c.fillRect(440, 290, 400, 20);
+      c.fillStyle = '#c8c4b8'; c.fillRect(440, 310, 400, 270);
+      for (let i = 0; i < 4; i++) { c.fillStyle = '#ffd890'; c.fillRect(480 + i * 90, 340, 40, 70); c.fillRect(480 + i * 90, 460, 40, 90); }
+      for (let i = 0; i < 6; i++) {
+        const x = 452 + i * 72;
+        c.fillStyle = '#ffffff'; c.fillRect(x, 300, 30, 280);
+        c.fillStyle = 'rgba(0,0,0,0.08)'; for (let k = 0; k < 3; k++) c.fillRect(x + 6 + k * 8, 310, 2, 260);
+        c.fillStyle = wall; c.fillRect(x - 5, 296, 40, 10); c.fillRect(x - 5, 570, 40, 10);
+      }
+      c.fillStyle = wall; c.fillRect(440, 418, 400, 12);
+      c.fillStyle = shade; for (let x = 446; x < 836; x += 14) c.fillRect(x, 400, 6, 18);
+      c.fillStyle = wall; c.fillRect(440, 396, 400, 6);
+      // the flagpole (the flag itself waves in fx)
+      c.fillStyle = '#c8c8d0'; c.fillRect(638, 150, 4, 115); c.fillStyle = '#ffd34d'; c.beginPath(); c.arc(640, 148, 5, 0, 6.283); c.fill();
+      // hedges, flowerbeds and the lawn
+      c.fillStyle = '#1e4a24';
+      for (let x = 60; x < W; x += 50) { if (x > 420 && x < 860) continue; c.beginPath(); c.arc(x, 585, 30, Math.PI, 0); c.fill(); }
+      c.fillStyle = '#c4122f'; for (let x = 70; x < W; x += 24) { if (x > 420 && x < 860) continue; c.beginPath(); c.arc(x, 592, 4, 0, 6.283); c.fill(); }
+      drawGround(c, '#3a8a3a', '#1a4a1a', '#5aaa4a');
+      c.fillStyle = 'rgba(255,255,255,0.06)'; for (let x = 0; x < W; x += 80) c.fillRect(x, FLOOR, 40, H - FLOOR);
+      // the fountain basin (the spray is in fx)
+      c.fillStyle = '#e8e4d8'; c.beginPath(); c.ellipse(640, 600, 120, 18, 0, 0, 6.283); c.fill();
+      c.fillStyle = '#5a9ad8'; c.beginPath(); c.ellipse(640, 598, 108, 12, 0, 0, 6.283); c.fill();
+      // the platforms are balconies with white balustrades
+      for (const p of this.platforms) {
+        c.fillStyle = 'rgba(0,0,0,0.2)'; c.fillRect(p.x + 6, p.y + 12, p.w - 12, 10);
+        c.fillStyle = wall; c.fillRect(p.x, p.y, p.w, 12);
+        c.fillStyle = shade; for (let x = p.x + 6; x < p.x + p.w - 4; x += 14) c.fillRect(x, p.y + 12, 6, 22);
+        c.fillStyle = wall; c.fillRect(p.x, p.y + 34, p.w, 8);
+        c.fillStyle = '#ffffff'; c.fillRect(p.x + 20, p.y + 42, 16, FLOOR - p.y - 42); c.fillRect(p.x + p.w - 36, p.y + 42, 16, FLOOR - p.y - 42);
+        c.fillStyle = 'rgba(255,255,255,0.4)'; c.fillRect(p.x, p.y, p.w, 2);
+      }
+    },
+    fx(c, t) {
+      // the flag on the roof, rippling
+      const fx0 = 642, fy0 = 152, fw = 84, fh = 48;
+      for (let i = 0; i < 13; i++) {
+        c.fillStyle = i % 2 ? '#ffffff' : '#c4122f';
+        c.beginPath();
+        for (let x = 0; x <= fw; x += 6) c.lineTo(fx0 + x, fy0 + i * fh / 13 + Math.sin(t * 0.12 - x * 0.08) * x * 0.06);
+        for (let x = fw; x >= 0; x -= 6) c.lineTo(fx0 + x, fy0 + (i + 1) * fh / 13 + Math.sin(t * 0.12 - x * 0.08) * x * 0.06 + 0.5);
+        c.fill();
+      }
+      c.fillStyle = '#1e3a8a'; c.beginPath();
+      for (let x = 0; x <= 36; x += 6) c.lineTo(fx0 + x, fy0 + Math.sin(t * 0.12 - x * 0.08) * x * 0.06);
+      for (let x = 36; x >= 0; x -= 6) c.lineTo(fx0 + x, fy0 + 26 + Math.sin(t * 0.12 - x * 0.08) * x * 0.06);
+      c.fill();
+      // fountain spray
+      c.fillStyle = 'rgba(200,230,255,0.75)';
+      for (let i = 0; i < 24; i++) {
+        const k = ((t * 0.02 + i / 24) % 1), dir = i % 2 ? 1 : -1, sp = 0.5 + (i % 5) * 0.25;
+        c.beginPath(); c.arc(640 + dir * k * 70 * sp, 596 - Math.sin(k * Math.PI) * 70, 2.2, 0, 6.283); c.fill();
+      }
+      // red, white and blue fireworks
+      for (const [period, off, x0] of [[150, 0, 260], [190, 70, 1000], [230, 140, 620]]) {
+        const ph = (t + off) % period;
+        if (ph >= 55) continue;
+        const n = Math.floor((t + off) / period), fx = x0 + ((n * 173) % 200) - 100, fy = 90 + ((n * 59) % 70), rr = ph * 1.9;
+        const col = ['255,80,90', '255,255,255', '90,140,255'][n % 3];
+        c.fillStyle = `rgba(${col},${1 - ph / 55})`;
+        for (let i = 0; i < 18; i++) { const a = i / 18 * 6.283; c.beginPath(); c.arc(fx + Math.cos(a) * rr, fy + Math.sin(a) * rr + ph * ph * 0.01, 2.4, 0, 6.283); c.fill(); }
+      }
+    },
+  },
+  {
+    id: 'cosmodrome', name: 'Red Star Cosmodrome', sub: 'Launch Pad 1 · Steppe Night', platforms: [{ x: 120, y: 440, w: 230 }, { x: 930, y: 440, w: 230 }],
+    draw(c) {
+      const sky = c.createLinearGradient(0, 0, 0, FLOOR);
+      sky.addColorStop(0, '#020410'); sky.addColorStop(0.7, '#14203a'); sky.addColorStop(1, '#3a3050');
+      c.fillStyle = sky; c.fillRect(0, 0, W, H);
+      const r = seeded(61);
+      for (let i = 0; i < 140; i++) { c.fillStyle = `rgba(255,255,255,${0.3 + r() * 0.7})`; c.fillRect(r() * W, r() * 420, 1.5, 1.5); }
+      // aurora ribbons
+      for (const [y, col] of [[120, 'rgba(90,255,170,0.12)'], [160, 'rgba(120,200,255,0.1)']]) {
+        c.fillStyle = col; c.beginPath(); c.moveTo(0, y);
+        for (let x = 0; x <= W; x += 40) c.lineTo(x, y + Math.sin(x * 0.008 + y) * 40);
+        for (let x = W; x >= 0; x -= 40) c.lineTo(x, y + 60 + Math.sin(x * 0.01 + y) * 30);
+        c.fill();
+      }
+      c.fillStyle = '#e8e4d8'; c.beginPath(); c.arc(200, 110, 30, 0, 6.283); c.fill();
+      c.fillStyle = '#020410'; c.beginPath(); c.arc(214, 102, 28, 0, 6.283); c.fill();
+      // snowy steppe on the horizon, with far-off hangars
+      c.fillStyle = '#c8ccd8'; c.beginPath(); c.moveTo(0, 520); for (let x = 0; x <= W; x += 60) c.lineTo(x, 510 + Math.sin(x * 0.01) * 8); c.lineTo(W, FLOOR); c.lineTo(0, FLOOR); c.fill();
+      c.fillStyle = '#4a4a5a'; for (const [x, w] of [[380, 120], [880, 90]]) { c.beginPath(); c.moveTo(x, 520); c.arc(x + w / 2, 520, w / 2, Math.PI, 0); c.fill(); }
+      // the launch gantry beside the rocket
+      c.strokeStyle = '#c4122f'; c.lineWidth = 4;
+      c.strokeRect(745, 120, 60, 440);
+      c.lineWidth = 2;
+      for (let y = 120; y < 560; y += 40) { c.beginPath(); c.moveTo(745, y); c.lineTo(805, y + 40); c.moveTo(805, y); c.lineTo(745, y + 40); c.moveTo(745, y); c.lineTo(805, y); c.stroke(); }
+      for (const y of [200, 320, 440]) { c.fillStyle = '#8a8a9a'; c.fillRect(690, y, 60, 6); }
+      c.fillStyle = '#ff3a3a'; c.beginPath(); c.arc(775, 114, 5, 0, 6.283); c.fill();
+      // the concrete pad, the flame trench and hazard stripes
+      c.fillStyle = '#5a5a66'; c.fillRect(520, 560, 240, 60);
+      c.fillStyle = '#1a1a22'; c.fillRect(580, 575, 120, 45);
+      // a propaganda billboard of a rocket and a red star
+      c.fillStyle = '#c4122f'; c.fillRect(960, 230, 200, 140); c.strokeStyle = '#ffd34d'; c.lineWidth = 4; c.strokeRect(960, 230, 200, 140);
+      drawStar(c, 1010, 300, 34, '#ffd34d');
+      c.fillStyle = '#f4f0e6'; c.beginPath(); c.moveTo(1100, 250); c.lineTo(1115, 290); c.lineTo(1115, 345); c.lineTo(1085, 345); c.lineTo(1085, 290); c.closePath(); c.fill();
+      c.fillStyle = '#ffd34d'; c.beginPath(); c.moveTo(1088, 345); c.lineTo(1100, 365); c.lineTo(1112, 345); c.closePath(); c.fill();
+      c.fillStyle = '#4a4a5a'; c.fillRect(985, 370, 10, 140); c.fillRect(1125, 370, 10, 140);
+      drawGround(c, '#6a6a76', '#2a2a34', '#e8ecf4');
+      c.fillStyle = '#ffd34d'; for (let x = 0; x < W; x += 60) { c.beginPath(); c.moveTo(x, FLOOR + 3); c.lineTo(x + 24, FLOOR + 3); c.lineTo(x + 12, FLOOR + 14); c.lineTo(x - 12, FLOOR + 14); c.closePath(); c.fill(); }
+      c.fillStyle = 'rgba(255,255,255,0.5)'; for (let i = 0; i < 30; i++) { c.beginPath(); c.ellipse(r() * W, FLOOR + 24 + r() * 80, 24 + r() * 30, 3, 0, 0, 6.283); c.fill(); }
+      // service walkways of red steel lattice
+      for (const p of this.platforms) {
+        c.strokeStyle = '#8a1a1a'; c.lineWidth = 3;
+        for (const lx of [p.x + 16, p.x + p.w - 16]) { c.beginPath(); c.moveTo(lx, p.y); c.lineTo(lx, FLOOR); c.stroke(); }
+        for (let y = p.y + 12; y < FLOOR; y += 34) { c.beginPath(); c.moveTo(p.x + 16, y); c.lineTo(p.x + p.w - 16, y + 34); c.moveTo(p.x + p.w - 16, y); c.lineTo(p.x + 16, y + 34); c.stroke(); }
+        c.fillStyle = '#c4122f'; c.fillRect(p.x, p.y, p.w, 12);
+        c.fillStyle = '#ffd34d'; for (let x = p.x; x < p.x + p.w; x += 24) c.fillRect(x, p.y + 4, 12, 4);
+        c.strokeStyle = '#b8b8c4'; c.lineWidth = 2; c.beginPath(); c.moveTo(p.x, p.y - 22); c.lineTo(p.x + p.w, p.y - 22); c.stroke();
+        for (let x = p.x + 4; x <= p.x + p.w; x += 30) { c.beginPath(); c.moveTo(x, p.y); c.lineTo(x, p.y - 22); c.stroke(); }
+      }
+    },
+    fx(c, t) {
+      // the rocket stands venting steam, then launches; a fresh one rolls out a little later
+      const ph = t % 1500, x = 640;
+      let lift = 0;
+      if (ph >= 1050) lift = (ph - 1050) ** 2 * 0.012;
+      const visible = ph < 1450 && lift < 900;
+      const base = 560 - lift;
+      if (ph >= 1050 && ph < 1450) {
+        // smoke billowing from the pad
+        const k = Math.min(1, (ph - 1050) / 40) * Math.max(0, 1 - (ph - 1250) / 200);
+        for (let i = 0; i < 14; i++) {
+          const a = (i * 2.4 + ph * 0.01) % 6.283, d = 60 + ((i * 37 + ph) % 140);
+          c.fillStyle = `rgba(220,220,230,${0.35 * k})`; c.beginPath(); c.arc(x + Math.cos(a) * d * 1.8, 590 - Math.abs(Math.sin(a)) * d * 0.5, 40 + (i % 4) * 12, 0, 6.283); c.fill();
+        }
+      }
+      if (!visible) return;
+      if (ph >= 1000) {
+        // ignition flame
+        const fl = ph >= 1050 ? 1 : (ph - 1000) / 50;
+        c.save(); c.globalCompositeOperation = 'lighter';
+        for (const [w, h, col] of [[30, 160, 'rgba(255,120,40,0.7)'], [18, 110, 'rgba(255,220,120,0.9)'], [8, 60, 'rgba(255,255,255,0.95)']]) {
+          c.fillStyle = col; c.beginPath(); c.moveTo(x - w, base); c.quadraticCurveTo(x, base + h * fl * (1 + Math.sin(t * 0.8) * 0.1), x + w, base); c.closePath(); c.fill();
+        }
+        c.restore();
+      }
+      // side boosters
+      for (const s of [-1, 1]) {
+        c.fillStyle = '#d8d4c8'; c.beginPath(); c.moveTo(x + s * 22, base - 60); c.lineTo(x + s * 40, base - 200); c.lineTo(x + s * 50, base - 60); c.lineTo(x + s * 48, base); c.lineTo(x + s * 24, base); c.closePath(); c.fill();
+        c.fillStyle = '#c4122f'; c.fillRect(Math.min(x + s * 24, x + s * 48), base - 14, 24, 14);
+      }
+      // the core stage and nose cone
+      c.fillStyle = '#f4f0e6'; c.fillRect(x - 26, base - 400, 52, 400);
+      c.fillStyle = 'rgba(0,0,0,0.12)'; c.fillRect(x + 8, base - 400, 18, 400);
+      c.fillStyle = '#c4122f'; c.fillRect(x - 26, base - 300, 52, 14); c.fillRect(x - 26, base - 120, 52, 14);
+      drawStar(c, x, base - 220, 16, '#c4122f');
+      c.fillStyle = '#f4f0e6'; c.beginPath(); c.moveTo(x - 26, base - 400); c.quadraticCurveTo(x - 24, base - 470, x, base - 500); c.quadraticCurveTo(x + 24, base - 470, x + 26, base - 400); c.closePath(); c.fill();
+      c.fillStyle = '#c4122f'; c.beginPath(); c.moveTo(x - 12, base - 478); c.quadraticCurveTo(x, base - 492, x, base - 500); c.quadraticCurveTo(x, base - 492, x + 12, base - 478); c.closePath(); c.fill();
+      if (ph < 400) {
+        // fresh rocket: fade in as it is rolled out
+        c.fillStyle = `rgba(20,32,58,${Math.max(0, 1 - ph / 60)})`; c.fillRect(x - 60, base - 510, 120, 520);
+      } else if (ph < 1050) {
+        // venting steam
+        c.fillStyle = 'rgba(240,240,250,0.35)';
+        for (let i = 0; i < 4; i++) { const k = ((t * 0.01 + i / 4) % 1); c.beginPath(); c.arc(x + 30 + k * 60, base - 260 - k * 30, 6 + k * 18, 0, 6.283); c.fill(); }
+      }
+    },
+  },
+  {
+    id: 'train', name: 'Desert Express', sub: 'Train Robbery · High Noon', platforms: [{ x: 170, y: 460, w: 210 }, { x: 900, y: 460, w: 210 }],
+    draw(c) {
+      const sky = c.createLinearGradient(0, 0, 0, FLOOR);
+      sky.addColorStop(0, '#2a7ac8'); sky.addColorStop(0.6, '#8ac0e0'); sky.addColorStop(1, '#f4d8a0');
+      c.fillStyle = sky; c.fillRect(0, 0, W, H);
+      const sg = c.createRadialGradient(1040, 90, 20, 1040, 90, 200);
+      sg.addColorStop(0, 'rgba(255,255,230,1)'); sg.addColorStop(0.25, 'rgba(255,250,200,0.8)'); sg.addColorStop(1, 'rgba(255,240,180,0)');
+      c.fillStyle = sg; c.fillRect(800, 0, 480, 320);
+      // far mesas (too far away to seem to move)
+      c.fillStyle = '#c87a50';
+      c.beginPath(); c.moveTo(0, 520); c.lineTo(80, 430); c.lineTo(300, 422); c.lineTo(350, 520);
+      c.lineTo(620, 520); c.lineTo(680, 400); c.lineTo(820, 396); c.lineTo(880, 520); c.lineTo(1100, 520); c.lineTo(1160, 450); c.lineTo(1280, 446); c.lineTo(1280, 560); c.lineTo(0, 560); c.fill();
+      c.fillStyle = 'rgba(120,50,30,0.25)'; c.fillRect(0, 470, W, 6);
+      c.fillStyle = '#e0b878'; c.fillRect(0, 520, W, FLOOR - 520);
+      // the boxcar roof we fight on, and the car's side below it
+      c.fillStyle = '#8a2a1a'; c.fillRect(0, FLOOR, W, 76);
+      c.fillStyle = '#6a1e12'; for (let x = 0; x < W; x += 40) c.fillRect(x, FLOOR + 6, 3, 70);
+      c.fillStyle = '#5a1a10'; c.fillRect(0, FLOOR, W, 8);
+      c.fillStyle = '#3a2a20'; c.fillRect(0, FLOOR - 4, W, 6);
+      c.font = '900 30px "Georgia", serif'; c.textAlign = 'center'; c.fillStyle = '#ffd34d';
+      c.fillText('DESERT EXPRESS', 320, FLOOR + 48); c.fillText('★ GOLD & MAIL ★', 960, FLOOR + 48);
+      // the coupling gap between two cars
+      c.fillStyle = '#1a120c'; c.fillRect(632, FLOOR, 16, 80);
+      c.fillStyle = '#3a3a40'; c.fillRect(620, FLOOR + 50, 40, 10);
+      c.fillStyle = '#101014'; c.fillRect(0, FLOOR + 76, W, H - FLOOR - 76);
+      // lookout perches on the roof
+      for (const p of this.platforms) {
+        c.fillStyle = 'rgba(0,0,0,0.2)'; c.fillRect(p.x + 8, p.y + 12, p.w - 16, 8);
+        c.fillStyle = '#5a3418';
+        for (const lx of [p.x + 18, p.x + p.w - 30]) c.fillRect(lx, p.y, 12, FLOOR - p.y);
+        c.strokeStyle = '#5a3418'; c.lineWidth = 4; c.beginPath(); c.moveTo(p.x + 24, p.y + 20); c.lineTo(p.x + p.w - 24, FLOOR - 10); c.moveTo(p.x + p.w - 24, p.y + 20); c.lineTo(p.x + 24, FLOOR - 10); c.stroke();
+        c.fillStyle = '#8a5a2a'; c.fillRect(p.x, p.y, p.w, 12);
+        c.fillStyle = 'rgba(0,0,0,0.25)'; for (let x = p.x + 20; x < p.x + p.w; x += 30) c.fillRect(x, p.y, 2, 12);
+        // a strongbox on the left perch, mail sacks on the right
+        if (p.x < 640) { c.fillStyle = '#3a3a40'; c.fillRect(p.x + 70, p.y - 30, 50, 30); c.fillStyle = '#ffd34d'; c.fillRect(p.x + 70, p.y - 20, 50, 5); c.fillRect(p.x + 91, p.y - 16, 8, 8); }
+        else { c.fillStyle = '#c8b088'; for (const sx of [p.x + 60, p.x + 100]) { c.beginPath(); c.ellipse(sx, p.y - 16, 20, 16, 0, 0, 6.283); c.fill(); } }
+      }
+    },
+    fx(c, t) {
+      // scenery whips past (the train runs to the right, so the world slides left)
+      const scroll = (sp, gap, off) => ((t * sp + off) % gap);
+      // cacti
+      for (let i = 0; i < 4; i++) {
+        const x = W + 100 - ((t * 7 + i * 420) % (W + 300)), h = 70 + (i * 37) % 60;
+        drawSaguaro(c, x, 600, h, '#4a6a2a');
+      }
+      // telegraph poles and the sagging wire between them
+      c.strokeStyle = '#4a3020'; c.lineWidth = 6;
+      const px0 = W - scroll(12, 360, 0);
+      c.lineWidth = 1.5; c.strokeStyle = '#2a1a10'; c.beginPath();
+      for (let x = px0 - 1080; x < W + 360; x += 360) { c.moveTo(x, 360); c.quadraticCurveTo(x + 180, 400, x + 360, 360); }
+      c.stroke();
+      for (let x = px0 - 1080; x < W + 360; x += 360) {
+        c.fillStyle = '#4a3020'; c.fillRect(x - 4, 350, 8, 260); c.fillRect(x - 24, 360, 48, 6);
+      }
+      // speed streaks of dust low on the ground
+      c.fillStyle = 'rgba(255,240,210,0.35)';
+      for (let i = 0; i < 10; i++) { const x = W - ((t * 22 + i * 157) % (W + 200)), y = 560 + (i * 13) % 50; c.fillRect(x, y, 70, 2); }
+      // engine smoke drifting back over the car
+      for (let i = 0; i < 10; i++) {
+        const k = ((t * 0.006 + i / 10) % 1), px = W + 60 - k * (W + 260), py = 60 + k * 110 + Math.sin(i * 3 + t * 0.02) * 12, pr = 26 + k * 46;
+        c.fillStyle = `rgba(235,230,222,${0.32 * (1 - k)})`;
+        for (const [ox, oy, s] of [[0, 0, 1], [-pr * 0.6, pr * 0.2, 0.7], [pr * 0.55, pr * 0.25, 0.65]]) { c.beginPath(); c.arc(px + ox, py + oy, pr * s, 0, 6.283); c.fill(); }
+      }
+      // spinning wheels under the car
+      for (const wx of [90, 250, 1030, 1190]) {
+        c.save(); c.translate(wx, FLOOR + 92); c.rotate(t * 0.4);
+        c.fillStyle = '#2a2a30'; c.beginPath(); c.arc(0, 0, 26, 0, 6.283); c.fill();
+        c.strokeStyle = '#8a8a96'; c.lineWidth = 3; for (let i = 0; i < 4; i++) { const a = i * Math.PI / 4; c.beginPath(); c.moveTo(-Math.cos(a) * 22, -Math.sin(a) * 22); c.lineTo(Math.cos(a) * 22, Math.sin(a) * 22); c.stroke(); }
+        c.restore();
+      }
+    },
+  },
 ];
 
 const bgCache = new Map();

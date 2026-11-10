@@ -104,6 +104,8 @@ const Sound = {
       case 'shotgun': S.noise(0.45, 1.0, 2400, 'lowpass', 180); S.osc('sine', 130, 38, 0.3, 0.55); S.osc('square', 90, 40, 0.1, 0.18); break;
       case 'click': S.noise(0.03, 0.5, 4000, 'highpass'); S.osc('square', 1800, 1200, 0.025, 0.06); break;
       case 'reload': S.noise(0.06, 0.6, 2500, 'bandpass', null, 0, 4); S.noise(0.07, 0.7, 1600, 'bandpass', null, 0.12, 4); S.osc('square', 300, 200, 0.04, 0.08, 0.12); break;
+      case 'siren': for (let i = 0; i < 3; i++) { S.osc('sawtooth', 420, 880, 0.45, 0.06, i * 0.9); S.osc('sawtooth', 880, 420, 0.45, 0.06, i * 0.9 + 0.45); } break;
+      case 'whistle': S.osc('sine', 2000, 300, 0.85, 0.12); break;
       case 'glug': S.osc('sine', 220, 140, 0.09, 0.2); S.osc('sine', 180, 110, 0.09, 0.16, 0.1); break;
       case 'cash': [1320, 1760, 2640].forEach((f, i) => S.osc('triangle', f, f, 0.12, 0.08, i * 0.05)); S.noise(0.08, 0.2, 6000, 'highpass'); break;
     }

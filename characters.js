@@ -4271,6 +4271,96 @@ const CAPITALISM = {
         },
       },
     },
+    {
+      name: 'Nuke', icon: '核', color: '#ff6a2a', cost: 60, cd: 1100, ground: true, ai: { min: 0, max: 1280 },
+      desc: 'Hits the big red button. A target zone tracks the opponent for a moment, then locks — and a nuke whistles down on it. Up to 180 damage at ground zero, less toward the edge. Unblockable but dodgeable, and Capitalism takes half damage if he\'s caught in his own blast.',
+      move: {
+        id: 'nuke', kind: 'special', startup: 0, active: 0, recovery: 0, total: 48, poses: ['castW', 'cast'],
+        getPose: (f, fr) => (fr < 26 ? POSES.castW : fr < 40 ? POSES.point : POSES.idle),
+        onFrame(f, fr, t) {
+          if (fr === 6) FX.text(f.x, f.y - 200 * f.scale, 'LAUNCH CODES CONFIRMED', '#ff6a2a', 18, 50);
+          if (fr !== 28) return;
+          Sound.play('siren'); FX.flash('#ff2a2a', 0.25);
+          const tgt = t && t.state !== 'ko' ? t : null;
+          spawnSummon(f, {
+            x: tgt ? tgt.x : f.x + f.facing * 300, y: FLOOR, life: 300, by: -200, bvy: 0, locked: false, boomAt: 0, R1: 140, R2: 300,
+            tick(e) {
+              // the zone follows its target until it locks, then the bomb falls
+              const v = World.opp(f, e.x);
+              if (e.age < 100 && v && v.state !== 'ko') e.x = U.lerp(e.x, v.x, 0.08);
+              if (e.age === 100) { e.locked = true; Sound.play('whistle'); FX.text(e.x, FLOOR - 230, 'INCOMING', '#ff3a3a', 26, 50); }
+              if (e.locked && !e.boomAt) {
+                e.bvy += 0.9; e.by += e.bvy;
+                if (e.by >= FLOOR - 20) {
+                  e.boomAt = e.age;
+                  FX.flash('#ffffff', 1); FX.shake(32); FX.slow(30, 0.3); FX.hitstop(10);
+                  Sound.play('boom'); Sound.play('shotgun');
+                  FX.explosion(e.x, FLOOR - 60, 220, ['#ffffff', '#ffe680', '#ff8a2a', '#c4122f']);
+                  FX.ring(e.x, FLOOR - 20, '#ffd88a', e.R2, 26, 10);
+                  FX.debris(e.x, FLOOR, '#5a4a3a', 24, 16); FX.smoke(e.x, FLOOR - 40, '#6a5a50', 16, 120, 40);
+                  for (const w of World.fighters) {
+                    if (w.state === 'ko') continue;
+                    const d = Math.abs(w.x - e.x);
+                    if (d > e.R2) continue;
+                    const dmg = d < e.R1 ? 180 : Math.round(U.lerp(130, 50, (d - e.R1) / (e.R2 - e.R1))), dir = w.x >= e.x ? 1 : -1;
+                    if (w === f || w.team === f.team) {
+                      if (w !== f) continue;
+                      w.hp = Math.max(1, w.hp - dmg / 2); w.vx = dir * 12; w.vy = -12; w.onGround = false; w.interruptMove(); w.setState('launch');
+                      FX.text(w.x, w.y - 180, 'FRIENDLY FIRE', '#ffd34d', 20, 50);
+                      continue;
+                    }
+                    Combat.hit(f, w, { dmg, kb: 18, kby: -18, launch: true, unblockable: true, noScale: true, hitstop: 18, shake: 20, sfx: 'boom', color: '#ff8a2a', x: w.x, y: w.midY, dir });
+                  }
+                }
+              }
+              if (e.boomAt && e.age - e.boomAt < 90 && e.age % 3 === 0) FX.glow(e.x + U.rand(-60, 60), FLOOR - U.rand(0, 40), U.pick(['#ff8a2a', '#ffd34d']), 24, 30, 0, -2);
+              if (e.boomAt && e.age - e.boomAt > 140) e.kill('done');
+            },
+            render(ctx, e) {
+              if (!e.boomAt) {
+                // the target zone on the ground
+                const pulse = 0.5 + 0.5 * Math.sin(e.age * (e.locked ? 0.6 : 0.25));
+                ctx.save();
+                ctx.fillStyle = `rgba(255,40,40,${0.08 + 0.1 * pulse})`; ctx.beginPath(); ctx.ellipse(e.x, FLOOR, e.R2, 22, 0, 0, 6.283); ctx.fill();
+                ctx.fillStyle = `rgba(255,40,40,${0.18 + 0.2 * pulse})`; ctx.beginPath(); ctx.ellipse(e.x, FLOOR, e.R1, 14, 0, 0, 6.283); ctx.fill();
+                ctx.strokeStyle = `rgba(255,60,60,${0.6 + 0.4 * pulse})`; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.ellipse(e.x, FLOOR, e.R2, 22, 0, 0, 6.283); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(e.x - 30, FLOOR); ctx.lineTo(e.x + 30, FLOOR); ctx.moveTo(e.x, FLOOR - 12); ctx.lineTo(e.x, FLOOR + 12); ctx.stroke();
+                ctx.font = '900 18px Impact, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#ff4a4a';
+                ctx.fillText(e.locked ? 'LOCKED' : `${Math.ceil((100 - e.age) / 60 * 10) / 10}s`, e.x, FLOOR - 30);
+                ctx.restore();
+                if (e.locked) {
+                  // the falling bomb: fat body, stripes and fins
+                  ctx.save(); ctx.translate(e.x, e.by);
+                  ctx.fillStyle = '#5a6a5a'; ctx.strokeStyle = '#07070c'; ctx.lineWidth = 3;
+                  ctx.beginPath(); ctx.moveTo(-14, -60); ctx.lineTo(-26, -82); ctx.lineTo(26, -82); ctx.lineTo(14, -60); ctx.closePath(); ctx.fill(); ctx.stroke();
+                  ctx.beginPath(); ctx.ellipse(0, -30, 26, 44, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+                  ctx.fillStyle = '#c4122f'; ctx.fillRect(-25, -40, 50, 6); ctx.fillStyle = '#ffffff'; ctx.fillRect(-25, -34, 50, 4); ctx.fillStyle = '#1e3a8a'; ctx.fillRect(-25, -30, 50, 6);
+                  drawStar(ctx, 0, -10, 9, '#ffffff');
+                  ctx.restore();
+                }
+                return;
+              }
+              // the mushroom cloud
+              const k = e.age - e.boomAt, a = Math.min(1, (140 - k) / 40), rise = Math.min(1, k / 50);
+              const top = FLOOR - 120 - rise * 300;
+              ctx.save(); ctx.globalAlpha = a;
+              const sg = ctx.createLinearGradient(0, top, 0, FLOOR);
+              sg.addColorStop(0, '#ffd88a'); sg.addColorStop(0.5, '#c86a3a'); sg.addColorStop(1, '#5a4038');
+              ctx.fillStyle = sg; ctx.beginPath(); ctx.moveTo(e.x - 30, FLOOR); ctx.quadraticCurveTo(e.x - 20, (top + FLOOR) / 2, e.x - 26, top + 40); ctx.lineTo(e.x + 26, top + 40); ctx.quadraticCurveTo(e.x + 20, (top + FLOOR) / 2, e.x + 30, FLOOR); ctx.closePath(); ctx.fill();
+              ctx.fillStyle = '#7a5a48'; ctx.beginPath(); ctx.ellipse(e.x, FLOOR - 10, 60 + rise * 140, 26, 0, 0, 6.283); ctx.fill();
+              const cr = 50 + rise * 90;
+              for (const [ox, oy, s, col] of [[0, 0, 1, '#e8a060'], [-cr * 0.7, cr * 0.2, 0.7, '#c87a4a'], [cr * 0.7, cr * 0.2, 0.7, '#c87a4a'], [0, -cr * 0.3, 0.75, '#ffd88a']]) {
+                ctx.fillStyle = col; ctx.beginPath(); ctx.arc(e.x + ox, top + oy, cr * s, 0, 6.283); ctx.fill();
+              }
+              ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a * Math.max(0, 1 - k / 60);
+              ctx.fillStyle = '#ffb04a'; ctx.beginPath(); ctx.arc(e.x, top, cr * 0.8, 0, 6.283); ctx.fill();
+              ctx.restore();
+            },
+          });
+        },
+      },
+    },
   ],
 };
 
@@ -4810,7 +4900,7 @@ const STORY = [
       { enemy: 'g4', diff: 0.3, arena: 'festival', text: 'A lesser curse is hoarding the festival\'s lanterns all to itself. Redistribute them. With the hammer.' },
       { enemy: 'daigo', diff: 0.46, arena: 'casino', text: 'A gambler is running an underground casino on the backs of the workers. Every hit you land takes his cursed energy for the people.' },
       { enemy: 'jin', diff: 0.62, arena: 'bamboo', text: 'A mercenary who sells his sword to the highest bidder. Raise the Iron Curtain against his reach and let the comrades march.' },
-      { enemy: 'capitalism', diff: 0.82, arena: 'shinjuku', boss: true, text: 'The Tycoon himself, guarding his fortune at the top of the city. Open Red Square Disco and let the music play.' },
+      { enemy: 'capitalism', diff: 0.82, arena: 'whitehouse', boss: true, text: 'The Tycoon himself, guarding his fortune in the big white house. Open Red Square Disco and let the music play.' },
     ],
   },
   {
@@ -4820,7 +4910,7 @@ const STORY = [
       { enemy: 'g3', diff: 0.3, arena: 'shibuya', text: 'A curse is squatting in prime Shibuya real estate. Evict it — hold down the AK-47 and keep your distance.' },
       { enemy: 'bao', diff: 0.46, arena: 'bamboo', text: 'A monastery sits on land you intend to develop. The panda refuses to sell. Make him an offer he can\'t refuse.' },
       { enemy: 'ayane', diff: 0.62, arena: 'court', text: 'The Arbiter has opened an antitrust case against you. Make It Rain on the courtroom, but watch for her Objection.' },
-      { enemy: 'communism', diff: 0.82, arena: 'shinjuku', boss: true, text: 'The Red Comrade has come to collectivise everything you own. Ring the bell on the Infinite Bull Market and close the deal.' },
+      { enemy: 'communism', diff: 0.82, arena: 'cosmodrome', boss: true, text: 'The Red Comrade is about to launch his rocket from the Cosmodrome. Ring the bell on the Infinite Bull Market and close the deal.' },
     ],
   },
   {
@@ -4830,7 +4920,7 @@ const STORY = [
       { enemy: 'g4', diff: 0.3, arena: 'festival', text: 'A lesser curse is spooking the horses at the night market. Club it with the stock and save your shells.' },
       { enemy: 'crow', diff: 0.46, arena: 'school', text: 'A crow spirit keeps to the skies. Hop up after it, and when it hides behind its flock, let Powder Rain fall.' },
       { enemy: 'jin', diff: 0.62, arena: 'bamboo', text: 'A rival gun-for-hire with a greatsword. Count your shells, Reload when you\'re dry, and never take him on with an empty chamber.' },
-      { enemy: 'capitalism', diff: 0.82, arena: 'shinjuku', boss: true, text: 'The Tycoon put a bounty on your head. Out-shoot his AK-47, then open The Hot Desert and wait for High Noon.' },
+      { enemy: 'capitalism', diff: 0.82, arena: 'train', boss: true, text: 'The Tycoon\'s gold is on the Desert Express. Rob the train: out-shoot his AK-47, then open The Hot Desert and wait for High Noon.' },
     ],
   },
 ];
