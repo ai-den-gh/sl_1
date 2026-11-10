@@ -4274,10 +4274,402 @@ const CAPITALISM = {
   ],
 };
 
+/* ---------------------------------------------------------------- SOMBRERO JUAN (original) */
+
+const CHILI = '#e0482a', SAND = '#e2b066';
+
+// A pump-action shotgun: wooden stock and pump, dark receiver, long barrel over a magazine tube.
+function drawShotgun(g, h, ang, firing) {
+  const { ctx, col, OL } = g;
+  ctx.save(); ctx.translate(h[0], h[1]); ctx.rotate(ang);
+  ctx.strokeStyle = OL; ctx.lineWidth = 1.5; ctx.lineJoin = 'round';
+  ctx.fillStyle = col('#7a4420');                                   // stock
+  ctx.beginPath(); ctx.moveTo(-4, -5); ctx.lineTo(-30, -3); ctx.lineTo(-32, 8); ctx.lineTo(-23, 8); ctx.lineTo(-4, 2); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = col('#26262c'); ctx.beginPath(); ctx.rect(-6, -7, 22, 8); ctx.fill(); ctx.stroke();   // receiver
+  ctx.fillStyle = col('#7a4420');                                   // grip
+  ctx.beginPath(); ctx.moveTo(-2, 1); ctx.lineTo(3, 1); ctx.lineTo(0, 10); ctx.lineTo(-5, 9); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = col('#3a3a44');
+  ctx.beginPath(); ctx.rect(16, -7, 46, 4); ctx.fill(); ctx.stroke();   // barrel
+  ctx.beginPath(); ctx.rect(16, -3, 36, 3); ctx.fill(); ctx.stroke();   // magazine tube
+  ctx.fillStyle = col('#9a5a2a'); ctx.beginPath(); ctx.rect(26, -4, 15, 7); ctx.fill(); ctx.stroke();   // pump
+  if (!g.o.white && !g.o.tint) {
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1;
+    for (const x of [29, 32, 35, 38]) lineTo2(ctx, [x, -3], [x, 2]);
+    if (firing) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = 'rgba(255,220,120,0.95)';
+      ctx.beginPath(); ctx.moveTo(62, -9); ctx.lineTo(88, -16); ctx.lineTo(82, -5); ctx.lineTo(90, 4); ctx.lineTo(62, -1); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255,130,40,0.7)'; ctx.beginPath(); ctx.arc(66, -5, 9, 0, 6.283); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+// Where the barrel ends, in world space.
+function shotgunMuzzle(f) {
+  const sk = skeleton(f.pose), ang = armDir(sk.aF), h = sk.aF[2], drop = poseDrop(f.pose, sk), s = f.scale;
+  const mx = h[0] + Math.cos(ang) * 62 - Math.sin(ang) * -5, my = h[1] + Math.sin(ang) * 62 + Math.cos(ang) * -5;
+  return { x: f.x + mx * f.facing * s, y: f.y + (my - drop) * s };
+}
+
+// One shell: a spreading cloud of buckshot that hits hardest at point-blank range.
+function fireShell(f, o = {}) {
+  const m = shotgunMuzzle(f), dir = f.facing;
+  f.muzzleT = 4;
+  Sound.play(o.light ? 'gunshot' : 'shotgun');
+  if (!o.light) { FX.shake(5); f.vx -= dir * 3.5; }
+  FX.glow(m.x, m.y, '#ffd88a', o.light ? 18 : 30, 6);
+  FX.smoke(m.x + dir * 10, m.y, '#9a9088', o.light ? 1 : 3, 10, 10);
+  for (let i = 0; i < (o.light ? 3 : 7); i++) FX.add({ type: 'glow', x: m.x, y: m.y, vx: dir * U.rand(14, 22), vy: U.rand(-3, 3), life: U.randInt(7, 12), size: 4, color: U.pick(['#ffd88a', '#ffb04a', '#ffffff']), drag: 0.9 });
+  FX.add({ type: 'debris', x: f.x + dir * 6, y: m.y - 4, vx: -dir * U.rand(2, 4), vy: U.rand(-6, -4), life: 34, size: 4, color: CHILI, grav: 0.4, rot: 0, vr: 0.3 });
+  const pellets = Array.from({ length: 6 }, () => [U.rand(-1, 1), U.rand(0.6, 1)]);
+  spawnProj(f, {
+    x: m.x, y: m.y, vx: dir * (o.light ? 26 : 22), vy: o.vy || 0, r: o.light ? 14 : 18, life: o.light ? 18 : 16, clash: o.light ? 1 : 2, pellets, x0: m.x,
+    hits: Object.assign(o.light
+      ? { dmg: 9, kb: 1.6, stun: 12, noScale: true, hitstop: 1, color: '#ffd88a', sfx: 'hit' }
+      : { dmgFn: (a, t) => U.clamp(100 - Math.abs(t.x - a.x) * 0.2, 45, 95), kb: 11, kby: -5, stun: 24, hitstop: 7, shake: 6, color: '#ffd88a', sfx: 'heavy', noScale: true }, o.hit),
+    tick(e) { e.r += o.light ? 0.6 : 1.6; },
+    onEnd(e, why) { if (why === 'hit') FX.spark(e.x, e.y, '#ffd88a', 8, 5); },
+    render(ctx, e) {
+      const k = 1 - e.age / e.life, d = Math.sign(e.vx);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+      for (const [py, len] of e.pellets) {
+        const y = e.y + py * e.r * 0.9;
+        ctx.strokeStyle = `rgba(255,200,90,${0.55 * k})`; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(e.x - d * 22 * len, y); ctx.lineTo(e.x, y); ctx.stroke();
+        ctx.fillStyle = `rgba(255,243,192,${k})`; ctx.beginPath(); ctx.arc(e.x, y, 2.4, 0, 6.283); ctx.fill();
+      }
+      ctx.restore();
+    },
+  });
+}
+
+// Is a platform overhead, sheltering this fighter from the powder?
+const underCover = t => World.platforms.some(p => t.x > p.x && t.x < p.x + p.w && p.y < t.y - 40);
+
+function drawSaguaro(ctx, x, base, h, color) {
+  ctx.fillStyle = color; ctx.strokeStyle = color; ctx.lineCap = 'round';
+  ctx.lineWidth = h * 0.16; lineTo2(ctx, [x, base], [x, base - h]);
+  ctx.lineWidth = h * 0.11;
+  ctx.beginPath(); ctx.moveTo(x, base - h * 0.45); ctx.lineTo(x - h * 0.28, base - h * 0.45); ctx.lineTo(x - h * 0.28, base - h * 0.75); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x, base - h * 0.6); ctx.lineTo(x + h * 0.25, base - h * 0.6); ctx.lineTo(x + h * 0.25, base - h * 0.85); ctx.stroke();
+}
+
+// Domain backdrop: a blazing sun over endless dunes, the air rippling with heat.
+function drawHotDesertBg(ctx, d, a) {
+  ctx.save(); ctx.globalAlpha = a;
+  const g = ctx.createLinearGradient(0, 0, 0, FLOOR);
+  g.addColorStop(0, '#d8461e'); g.addColorStop(0.55, '#ff9a3a'); g.addColorStop(1, '#ffe2a0');
+  ctx.fillStyle = g; ctx.fillRect(-30, -30, W + 60, H + 60);
+  // the sun, swelling as the domain goes on
+  const sr = 95 + Math.min(40, d.age * 0.1) + Math.sin(d.age * 0.05) * 4;
+  const sg = ctx.createRadialGradient(W / 2, 190, sr * 0.4, W / 2, 190, sr * 2.4);
+  sg.addColorStop(0, 'rgba(255,250,210,0.9)'); sg.addColorStop(1, 'rgba(255,200,90,0)');
+  ctx.fillStyle = sg; ctx.fillRect(-30, -30, W + 60, 600);
+  ctx.fillStyle = '#fff6c8'; ctx.beginPath(); ctx.arc(W / 2, 190, sr, 0, 6.283); ctx.fill();
+  // far and near dunes
+  for (const [base, amp, len, col, sp] of [[480, 28, 260, '#e6a85a', 0.2], [540, 34, 340, '#d48a40', 0.35]]) {
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(-30, FLOOR);
+    for (let x = -30; x <= W + 30; x += 20) ctx.lineTo(x, base + Math.sin((x + d.age * sp) / len * 6.283) * amp);
+    ctx.lineTo(W + 30, FLOOR); ctx.closePath(); ctx.fill();
+  }
+  drawSaguaro(ctx, 150, 560, 120, '#5a6a2a'); drawSaguaro(ctx, 1110, 570, 140, '#4a5a22'); drawSaguaro(ctx, 860, 520, 60, '#7a7a3a');
+  // heat shimmer
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 2;
+  for (let i = 0; i < 7; i++) {
+    const y = 300 + i * 45; ctx.beginPath();
+    for (let x = 0; x <= W; x += 16) ctx.lineTo(x, y + Math.sin(x * 0.03 + d.age * 0.15 + i) * 4);
+    ctx.stroke();
+  }
+  // sand floor with wind ripples
+  ctx.fillStyle = SAND; ctx.fillRect(-30, FLOOR, W + 60, H - FLOOR + 30);
+  ctx.strokeStyle = 'rgba(150,90,30,0.35)'; ctx.lineWidth = 2;
+  for (let y = FLOOR + 14; y < H; y += 16) { ctx.beginPath(); for (let x = -30; x <= W + 30; x += 20) ctx.lineTo(x, y + Math.sin((x + y * 3) * 0.04) * 3); ctx.stroke(); }
+  ctx.restore();
+}
+
+function rollTumbleweed(f, side) {
+  const dir = -side;
+  spawnProj(f, {
+    x: side < 0 ? -40 : W + 40, y: FLOOR - 26, vx: dir * U.rand(8, 11), r: 24, life: 200, wallKill: false, rot: 0, hop: 0,
+    hits: { dmg: 24, kb: 6, kby: -6, stun: 18, unblockable: true, sureHit: true, type: 'domain', hitstop: 4, color: '#c89a5a', sfx: 'hit', dir },
+    tick(e) {
+      e.rot += e.vx * 0.04; e.hop += 0.18;
+      e.y = FLOOR - 26 - Math.abs(Math.sin(e.hop)) * 40;
+      if (e.age % 6 === 0) FX.dust(e.x, FLOOR, 1);
+    },
+    render(ctx, e) {
+      ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.rot);
+      ctx.strokeStyle = '#8a5a2a'; ctx.lineWidth = 2;
+      for (let i = 0; i < 7; i++) { ctx.beginPath(); ctx.ellipse(0, 0, 24, 9 + i * 2, i * 0.9, 0, 6.283); ctx.stroke(); }
+      ctx.strokeStyle = '#c89a5a'; ctx.lineWidth = 1.2;
+      for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.ellipse(0, 0, 18, 6 + i * 2, i * 1.3 + 0.4, 0, 6.283); ctx.stroke(); }
+      ctx.restore();
+    },
+  });
+}
+
+const SERAPE = ['#c4122f', '#ff8a1a', '#ffd34d', '#2a9a5a', '#1aa0b8', '#ffd34d', '#ff8a1a'];
+
+const JUAN = {
+  id: 'juan', name: 'Sombrero Juan', short: 'JUAN', title: 'The Desert Bandit', kanji: '砂漠', color: CHILI,
+  style: 'A close-range bruiser: clubs with the stock of his shotgun, blasts point-blank with K, and must reload after every two shells.',
+  bio: 'A masked outlaw under a sombrero as wide as a wagon wheel, wrapped in a heavy striped serape. Nobody knows his real name; everyone knows the sound of his shotgun.',
+  passive: { name: 'Two in the Chamber', desc: 'K fires a shotgun shell that hits hardest point-blank — but Juan only holds 2 shells (shown over his head) and must Reload when he runs dry.' },
+  hp: 1000, speed: 1.05, shoulderW: 17, hipW: 13,
+  melee: { weapon: 'shotgun', weaponName: 'Shotgun', reach: 22, power: 1.1 },
+  // J clubs with the shotgun; K fires a shell (if he has one loaded)
+  moveOverrides: {
+    basic1: { poses: ['slashW', 'slash'], swing: { color: '#d8b080', r: 84 }, sfx: 'whoosh' },
+    basic2: { poses: ['slash2W', 'slash2'], swing: { color: '#d8b080', r: 84, a0: 60, a1: -70 }, sfx: 'whoosh' },
+    basic3: { poses: ['slashW', 'slash'], hitbox: { x: 0, y: -150, w: 90, h: 120 }, hit: { dmg: 50, kb: 9, kby: -7, stun: 26, hitstop: 7, shake: 5, sfx: 'heavy' }, swing: { color: '#d8b080', r: 96, w: 10 }, sfx: 'whoosh' },
+    heavy: {
+      startup: 7, active: 1, recovery: 22, lunge: 0, hitbox: null, hit: null, swing: null, sfx: null, poses: ['point', 'point'],
+      getPose: (f, fr) => { const p = poseCopy(POSES.point); if (fr >= 7 && fr < 14 && f.mvars.fired) { p.aF[0] += 18; p.lean -= 8; } return p; },
+      onFrame(f, fr) {
+        if (fr !== 7) return;
+        if (f.shells > 0) { f.shells--; f.mvars.fired = true; fireShell(f); if (!f.shells) FX.text(f.x, f.y - 200 * f.scale, 'RELOAD!', '#ffd34d', 18, 40); }
+        else { Sound.play('click'); FX.text(f.x, f.y - 190 * f.scale, '*click*', '#cfcfd8', 18, 40); }
+      },
+    },
+  },
+  look: { skin: '#c98a5a', top: '#5a3420', pants: '#3a2a20', accent: CHILI, shoe: '#2a1a10' },
+  aiStyle: { pref: 110 },
+  onReset(f) { f.shells = 2; f.muzzleT = 0; },
+  passiveTick(f) { if (f.muzzleT > 0) f.muzzleT--; },
+  // the shells he has loaded, floating above the sombrero
+  drawAura(ctx, f) {
+    if (f.state === 'ko') return;
+    const h = headPos(f), y = h.y - 74 * f.scale;
+    ctx.save();
+    for (let i = 0; i < 2; i++) {
+      const x = h.x - 8 + i * 16, full = i < f.shells;
+      ctx.globalAlpha = full ? 1 : 0.5;
+      ctx.fillStyle = full ? '#d42a2a' : 'rgba(0,0,0,0.4)'; ctx.strokeStyle = full ? '#3a0a0a' : '#d8d8e0'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.rect(x - 4, y - 9, 8, 14); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = full ? '#e8c050' : 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.rect(x - 4, y + 5, 8, 4); ctx.fill(); ctx.stroke();
+    }
+    if (!f.shells && World.frame % 30 < 18) {
+      ctx.globalAlpha = 1; ctx.font = '900 11px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#ffd34d';
+      ctx.fillText('RELOAD', h.x, y - 14);
+    }
+    ctx.restore();
+  },
+  drawHead(g) {
+    const { ctx, sk, col, OL, o } = g, [hx, hy] = sk.head, r = LIMB.headR, plain = o.white || o.tint;
+    headCircle(g, hx, hy, r, '#c98a5a');
+    if (!plain) {
+      // bandit's mask across the eyes, its ties fluttering behind
+      ctx.save(); ctx.beginPath(); ctx.arc(hx, hy, r - 1, 0, 6.283); ctx.clip();
+      ctx.fillStyle = '#15151b'; ctx.fillRect(hx - r, hy - 5, 2 * r, 9);
+      ctx.restore();
+      const fl = Math.sin(((o.fighter && o.fighter.anim) || 0) * 0.2) * 3;
+      ctx.fillStyle = '#15151b';
+      ctx.beginPath(); ctx.moveTo(hx - r + 1, hy - 4); ctx.lineTo(hx - r - 12, hy - 7 + fl); ctx.lineTo(hx - r - 10, hy - 1 + fl); ctx.lineTo(hx - r + 1, hy + 2); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(hx - r + 1, hy - 1); ctx.lineTo(hx - r - 9, hy + 4 - fl); ctx.lineTo(hx - r - 6, hy + 7 - fl); ctx.lineTo(hx - r + 1, hy + 3); ctx.closePath(); ctx.fill();
+      eyeDots(g, [[hx + 6.5, hy - 0.5, 2.6, '#ffffff', '#1a1a22'], [hx + 12, hy - 0.5, 2.2, '#ffffff', '#1a1a22']]);
+      // bushy moustache
+      ctx.fillStyle = '#1a120c';
+      ctx.beginPath(); ctx.moveTo(hx + 3, hy + 7); ctx.quadraticCurveTo(hx + 9, hy + 4, hx + 15, hy + 7); ctx.quadraticCurveTo(hx + 13, hy + 11, hx + 9, hy + 9); ctx.quadraticCurveTo(hx + 5, hy + 12, hx + 3, hy + 7); ctx.fill();
+    }
+    // the sombrero: a huge curled brim and a tall rounded crown with a stitched band
+    const by = hy - r + 4;
+    ctx.strokeStyle = OL; ctx.lineWidth = 2.5;
+    ctx.fillStyle = col('#d8a848');
+    ctx.beginPath(); ctx.moveTo(hx - r - 30, by - 6); ctx.quadraticCurveTo(hx - r - 22, by + 6, hx, by + 6); ctx.quadraticCurveTo(hx + r + 22, by + 6, hx + r + 30, by - 6);
+    ctx.quadraticCurveTo(hx + r + 18, by - 2, hx, by - 2); ctx.quadraticCurveTo(hx - r - 18, by - 2, hx - r - 30, by - 6); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(hx - 13, by); ctx.quadraticCurveTo(hx - 14, by - 28, hx, by - 30); ctx.quadraticCurveTo(hx + 14, by - 28, hx + 13, by); ctx.closePath();
+    ctx.fillStyle = col('#e4b85a'); ctx.fill(); ctx.stroke();
+    if (!plain) {
+      ctx.fillStyle = CHILI; ctx.fillRect(hx - 13.5, by - 9, 27, 6);
+      ctx.fillStyle = '#2a9a5a'; for (let x = -10; x <= 8; x += 6) { ctx.beginPath(); ctx.moveTo(hx + x, by - 9); ctx.lineTo(hx + x + 3, by - 6); ctx.lineTo(hx + x, by - 3); ctx.closePath(); ctx.fill(); }
+      ctx.strokeStyle = 'rgba(120,70,20,0.5)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.ellipse(hx, by + 1, r + 22, 3, 0, 0, Math.PI); ctx.stroke();
+    }
+  },
+  // a heavy striped serape over his shoulders, hanging past the hips with a fringed hem
+  drawTorso(g) {
+    const { ctx, sk, col, OL, o } = g, lt = Math.atan2(sk.td[0], -sk.td[1]);
+    ctx.save(); ctx.rotate(lt);
+    const top = -43, bot = 22;
+    ctx.beginPath(); ctx.moveTo(-20, top); ctx.lineTo(20, top); ctx.lineTo(31, bot); ctx.lineTo(-31, bot); ctx.closePath();
+    ctx.fillStyle = col('#5a3420'); ctx.fill();
+    if (!o.white && !o.tint) {
+      ctx.save(); ctx.clip();
+      for (let i = 0; i < SERAPE.length; i++) { ctx.fillStyle = SERAPE[i]; ctx.fillRect(-40, bot - 10 - i * 9, 80, 4); }
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(-40, top + 6, 80, 2);
+      ctx.restore();
+    }
+    ctx.lineWidth = 3; ctx.strokeStyle = OL; ctx.stroke();
+    // collar hole for the head and the fringe at the hem
+    ctx.fillStyle = col('#3a2010'); ctx.beginPath(); ctx.ellipse(0, top + 1, 8, 3, 0, 0, 6.283); ctx.fill();
+    ctx.strokeStyle = col('#ffd34d'); ctx.lineWidth = 1.5;
+    for (let x = -29; x <= 29; x += 5) lineTo2(ctx, [x, bot], [x + 1, bot + 6]);
+    ctx.restore();
+  },
+  drawWeapon(g) { const fi = g.o.fighter; drawShotgun(g, g.sk.aF[2], armDir(g.sk.aF), fi && fi.muzzleT > 0); },
+  abilities: [
+    {
+      name: 'Hop', icon: '跳', color: '#ffd34d', cost: 16, cd: 240, ground: true, ai: { min: 60, max: 420 },
+      desc: 'Springs sky-high off his boots, drifts over the opponent, then crashes down sombrero-first in a shockwave that launches anyone nearby.',
+      move: {
+        id: 'hop', kind: 'special', startup: 0, active: 0, recovery: 0, total: 200, keepVel: true, poses: ['jump', 'jump'],
+        getPose: (f) => (f.mvars.landed ? POSES.heavy : f.vy < 0 ? POSES.jump : POSES.fall),
+        onStart(f, t) {
+          f.vy = -29; f.onGround = false; f.y -= 1;
+          f.mvars.tx = t ? t.x : f.x + f.facing * 250;
+          FX.dust(f.x, FLOOR, 12); FX.ring(f.x, f.y, '#ffd34d', 50, 14, 3); Sound.play('jump');
+          FX.text(f.x, f.y - 190, '¡ARRIBA!', '#ffd34d', 22, 45);
+        },
+        onFrame(f, fr, t) {
+          const mv = f.mvars;
+          if (mv.landed) { f.vx *= 0.7; if (fr - mv.landed >= 16) f.endMove(); return; }
+          if (t && t.state !== 'ko' && f.vy < 6) mv.tx = t.x;
+          f.vx = U.clamp((mv.tx - f.x) * 0.06, -9, 9);
+          if (f.vy > 0) f.vy += 1.4;   // slam down faster than he rose
+          if (f.vy > 0 && fr % 2 === 0) FX.ghost(f);
+          if (fr > 4 && f.onGround) {
+            mv.landed = fr; f.vx = 0;
+            FX.shake(14); FX.dust(f.x, f.y, 24); FX.ring(f.x, f.y - 10, '#ffd34d', 170, 20, 6); FX.debris(f.x, f.y, '#a88a5a', 12, 10); Sound.play('boom');
+            for (const v of World.enemies(f)) {
+              const dx = Math.abs(v.x - f.x);
+              if (v.state === 'ko' || dx > 170 || v.y < f.y - 70) continue;
+              Combat.hit(f, v, { dmg: dx < 60 ? 95 : 70, kb: 9, kby: -13, launch: true, hitstop: 10, shake: 8, sfx: 'heavy', color: '#ffd34d', x: v.x, y: v.y - 30, dir: dirTo(f, v) });
+            }
+            return;
+          }
+          if (fr >= 190) f.endMove();
+        },
+      },
+    },
+    {
+      name: 'Barrage', icon: '連', color: '#ffb04a', cost: 24, cd: 300, ai: { min: 0, max: 460 },
+      desc: 'Pumps and fires 10 shells in rapid succession, a wall of buckshot that keeps the opponent pinned. Doesn\'t use his loaded shells.',
+      move: {
+        id: 'barrage', kind: 'special', startup: 8, active: 0, recovery: 0, total: 66, poses: ['point', 'point'],
+        getPose: (f, fr) => { const p = poseCopy(POSES.point); if (fr >= 8 && fr < 50) { const k = (fr - 8) % 4 < 2; p.aF[0] += k ? 12 : 0; p.lean -= k ? 5 : 0; } return p; },
+        onFrame(f, fr) {
+          if (fr === 8) FX.text(f.x, f.y - 195 * f.scale, '¡FUEGO!', '#ffb04a', 22, 40);
+          if (fr >= 8 && fr < 48 && (fr - 8) % 4 === 0) {
+            const last = fr === 44;
+            fireShell(f, { light: !last, vy: U.rand(-0.8, 0.8), hit: last ? { dmg: 20, kb: 9, kby: -5, stun: 22, hitstop: 5 } : null });
+            f.vx -= f.facing * 0.8;
+          }
+        },
+      },
+    },
+    {
+      name: 'Powder Rain', icon: '粉', color: CHILI, cost: 30, cd: 600, ai: { min: 0, max: 1280, when: (f, o) => !underCover(o) },
+      desc: 'Blasts a sack of chili powder into the sky. It rains down over the WHOLE map for 3 seconds, burning anyone it lands on — only cover under a platform keeps you safe.',
+      move: {
+        id: 'powder', kind: 'special', startup: 18, active: 1, recovery: 18, poses: ['castW', 'win'],
+        onFrame(f, fr) {
+          if (fr !== 18) return;
+          Sound.play('shotgun'); FX.shake(6);
+          FX.text(f.x, f.y - 200 * f.scale, '¡PICANTE!', CHILI, 26, 55);
+          for (let i = 0; i < 14; i++) FX.add({ type: 'glow', x: f.x, y: f.y - 170, vx: U.rand(-3, 3), vy: U.rand(-14, -8), life: 30, size: U.rand(8, 14), color: U.pick([CHILI, '#ff8a1a', '#a8281a']), drag: 0.96 });
+          spawnSummon(f, {
+            x: W / 2, y: 0, life: 230, grains: [], layer: 'front',
+            tick(e) {
+              if (e.age < 190) for (let i = 0; i < 9; i++) e.grains.push({ x: U.rand(0, W), y: U.rand(-40, 0), vy: U.rand(4, 7), c: U.pick([CHILI, '#ff8a1a', '#a8281a', '#d86a2a']), t: 0, land: 0 });
+              for (const p of e.grains) {
+                if (p.land) { p.t++; continue; }
+                p.y += p.vy; p.x += Math.sin((p.y + p.x) * 0.02) * 0.6;
+                const gy = World.groundAt(p.x, p.y - p.vy);
+                if (p.y >= gy) { p.y = gy; p.land = 1; }
+              }
+              e.grains = e.grains.filter(p => p.t < 40);
+              if (e.age < 30 || e.age >= 210) return;
+              for (const v of World.enemies(f)) {
+                if (v.state === 'ko' || underCover(v)) continue;
+                v.hp = Math.max(1, v.hp - 0.55);
+                v.buffs.mud = Math.max(v.buffs.mud || 0, 20);   // coughing and half-blind: slowed
+                if (e.age % 40 === 0) FX.text(v.x + U.rand(-20, 20), v.y - 175 * v.scale, U.pick(['*cough*', 'ACHOO!', 'HOT!']), '#ffb08a', 16, 40);
+                if (e.age % 4 === 0) FX.glow(v.x + U.rand(-18, 18), v.y - U.rand(20, 140) * v.scale, CHILI, 9, 14, 0, -1.2);
+              }
+            },
+            render(ctx, e) {
+              const a = Math.min(1, (e.life - e.age) / 25);
+              ctx.save(); ctx.globalAlpha = 0.18 * a * Math.min(1, e.age / 30);
+              ctx.fillStyle = '#ff6a2a'; ctx.fillRect(0, 0, W, FLOOR);
+              ctx.globalAlpha = a;
+              for (const p of e.grains) { ctx.fillStyle = p.c; ctx.globalAlpha = a * (p.land ? 1 - p.t / 40 : 1); ctx.fillRect(p.x - 1.5, p.y - 3, 3, p.land ? 2 : 5); }
+              ctx.restore();
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Super Speed Rush', icon: '疾', color: '#ffe2a0', cost: 20, cd: 260, ground: true, ai: { min: 80, max: 650 },
+      desc: 'Digs in his boots and bolts forward in a straight line at blinding speed, trampling straight through anyone in the way.',
+      move: {
+        id: 'rush', kind: 'special', startup: 10, active: 22, recovery: 14, keepVel: true, poses: ['dash', 'dash'],
+        hitbox: { x: -10, y: -145, w: 80, h: 145 }, hit: { dmg: 75, kb: 13, kby: -7, launch: true, hitstop: 9, shake: 8, sfx: 'heavy', color: '#ffe2a0' },
+        getPose: (f, fr) => (fr < 10 ? POSES.block : fr < 32 ? POSES.dash : POSES.idle),
+        onFrame(f, fr) {
+          if (fr < 10) { f.vx *= 0.5; if (fr === 4) FX.dust(f.x, f.y, 6); return; }
+          if (fr === 10) { Sound.play('dash'); FX.ring(f.x, f.y - 70, '#ffe2a0', 60, 12, 3); }
+          if (fr < 32) {
+            f.vx = f.facing * 30;
+            if (fr % 2 === 0) { FX.ghost(f, '#ffd34d'); FX.dust(f.x, f.y, 2); }
+          } else f.vx *= 0.7;
+        },
+      },
+    },
+    {
+      name: 'The Hot Desert', icon: '陽', color: '#ff9a3a', cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 1280 },
+      desc: 'DOMAIN EXPANSION. A sun-scorched desert that never ends. The heat cooks the opponent, tumbleweeds bowl into them, and Juan\'s shotgun never needs reloading — then the clock strikes HIGH NOON and he fires the shot that ends it.',
+      move: {
+        id: 'hotdesert', kind: 'ult', startup: 60, active: 0, recovery: 0, poses: ['sign', 'sign'],
+        onStart(f) { f.invuln = 70; domainCutscene(f, 'hands', 'THE HOT DESERT'); FX.banner('DOMAIN EXPANSION', 'THE HOT DESERT', '#ff9a3a', 130); FX.slow(40, 0.35); Sound.play('charge'); },
+        onFrame(f, fr) {
+          f.invuln = Math.max(f.invuln, 2);
+          if (fr !== 40) return;
+          Domains.start(f, {
+            type: 'hotdesert', life: 420, slowOpp: true, bg: drawHotDesertBg, music: 'desert',
+            tick(d, t) {
+              if (f.state !== 'ko') f.shells = 2;   // endless ammo in his own desert
+              if (d.age % 10 === 0) FX.add({ type: 'glow', x: U.rand(0, W), y: FLOOR - U.rand(0, 20), vx: U.rand(-0.5, 0.5), vy: U.rand(-2, -1), life: 60, size: U.rand(6, 10), color: 'rgba(255,240,200,0.6)', drag: 0.99 });
+              if (!t) return;
+              t.hp = Math.max(1, t.hp - 0.22);   // the heat
+              if (d.age % 6 === 0) FX.glow(t.x + U.rand(-16, 16), t.y - U.rand(20, 140) * t.scale, '#ff9a3a', 9, 16, 0, -1.6);
+              if (d.age >= 30 && d.age < 360 && d.age % 50 === 0) rollTumbleweed(f, (d.age / 50) % 2 ? -1 : 1);
+            },
+            onEnd(d, interrupted) {
+              if (interrupted || f.state === 'ko') return;
+              FX.banner('HIGH NOON', '¡ADIÓS, AMIGO!', '#ffd34d', 80);
+              FX.flash('#fff6c8', 0.7); FX.shake(22); Sound.play('shotgun'); Sound.play('boom');
+              for (const v of World.enemies(f)) {
+                if (v.state === 'ko') continue;
+                FX.explosion(v.x, v.midY, 120, ['#ffffff', '#ffd88a', CHILI]);
+                Combat.hit(f, v, { dmg: 120, kb: 16, kby: -14, launch: true, unblockable: true, sureHit: true, noScale: true, hitstop: 16, shake: 16, sfx: 'boom', color: '#ffd34d', type: 'domain', x: v.x, y: v.midY, dir: dirTo(f, v) });
+              }
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Reload', icon: '弾', color: '#d8d8e0', cost: 0, cd: 20, noCopy: true, ai: { min: 0, max: 1280, when: (f, o) => f.shells === 0 || (f.shells < 2 && Math.abs(o.x - f.x) > 300) },
+      desc: 'Thumbs fresh shells into the shotgun and racks the pump. Juan holds 2 shells; K is useless until he reloads. Only usable when he isn\'t full.',
+      getMove: f => (f.shells < 2 ? JUAN.reloadMove : null),
+    },
+  ],
+  reloadMove: {
+    id: 'reload', kind: 'special', startup: 0, active: 0, recovery: 0, total: 44, poses: ['castW', 'castW'],
+    getPose: (f, fr) => { const p = poseCopy(POSES.castW); p.aB[0] += Math.sin(fr * 0.5) * 10; return p; },
+    onFrame(f, fr) {
+      if ((fr === 12 || fr === 24) && f.shells < 2) { f.shells++; Sound.play('click'); FX.spark(handPos(f).x, handPos(f).y, '#e8c050', 3, 2); }
+      if (fr === 34) { Sound.play('reload'); FX.text(f.x, f.y - 195 * f.scale, 'CHK-CHK', '#d8d8e0', 18, 40); }
+    },
+  },
+};
+
 /* ---------------------------------------------------------------- roster */
 
-const CHARS = { gojo: GOJO, sukuna: SUKUNA, yuji: YUJI, yuta: YUTA, megumi: MEGUMI, g4: CURSE_G4, g3: CURSE_G3, finger: FINGER_BEARER, hanami: HANAMI, jogo: JOGO, mahito: MAHITO, choso: CHOSO, jin: JIN, ayane: AYANE, bao: BAO, daigo: DAIGO, wraith: WRAITH, lantern: LANTERN, crow: CROW, communism: COMMUNISM, capitalism: CAPITALISM };
-const ROSTER = ['yuji', 'gojo', 'sukuna', 'yuta', 'megumi', 'mahito', 'jogo', 'choso', 'jin', 'ayane', 'bao', 'daigo', 'communism', 'capitalism', 'hanami', 'finger', 'g3', 'g4', 'wraith', 'lantern', 'crow'];
+const CHARS = { gojo: GOJO, sukuna: SUKUNA, yuji: YUJI, yuta: YUTA, megumi: MEGUMI, g4: CURSE_G4, g3: CURSE_G3, finger: FINGER_BEARER, hanami: HANAMI, jogo: JOGO, mahito: MAHITO, choso: CHOSO, jin: JIN, ayane: AYANE, bao: BAO, daigo: DAIGO, wraith: WRAITH, lantern: LANTERN, crow: CROW, communism: COMMUNISM, capitalism: CAPITALISM, juan: JUAN };
+const ROSTER = ['yuji', 'gojo', 'sukuna', 'yuta', 'megumi', 'mahito', 'jogo', 'choso', 'jin', 'ayane', 'bao', 'daigo', 'communism', 'capitalism', 'juan', 'hanami', 'finger', 'g3', 'g4', 'wraith', 'lantern', 'crow'];
 const CURSE_IDS = [];
 
 /* ---------------------------------------------------------------- Story Mode */
@@ -4429,6 +4821,16 @@ const STORY = [
       { enemy: 'bao', diff: 0.46, arena: 'bamboo', text: 'A monastery sits on land you intend to develop. The panda refuses to sell. Make him an offer he can\'t refuse.' },
       { enemy: 'ayane', diff: 0.62, arena: 'court', text: 'The Arbiter has opened an antitrust case against you. Make It Rain on the courtroom, but watch for her Objection.' },
       { enemy: 'communism', diff: 0.82, arena: 'shinjuku', boss: true, text: 'The Red Comrade has come to collectivise everything you own. Ring the bell on the Infinite Bull Market and close the deal.' },
+    ],
+  },
+  {
+    id: 'juan', title: 'High Noon', hero: 'juan', kanji: '正午',
+    blurb: 'A masked bandit in a sombrero rides into town with a shotgun, two shells and a grudge.',
+    fights: [
+      { enemy: 'g4', diff: 0.3, arena: 'festival', text: 'A lesser curse is spooking the horses at the night market. Club it with the stock and save your shells.' },
+      { enemy: 'crow', diff: 0.46, arena: 'school', text: 'A crow spirit keeps to the skies. Hop up after it, and when it hides behind its flock, let Powder Rain fall.' },
+      { enemy: 'jin', diff: 0.62, arena: 'bamboo', text: 'A rival gun-for-hire with a greatsword. Count your shells, Reload when you\'re dry, and never take him on with an empty chamber.' },
+      { enemy: 'capitalism', diff: 0.82, arena: 'shinjuku', boss: true, text: 'The Tycoon put a bounty on your head. Out-shoot his AK-47, then open The Hot Desert and wait for High Noon.' },
     ],
   },
 ];

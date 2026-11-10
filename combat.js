@@ -576,6 +576,7 @@ class Fighter {
     this.buf = null; this.bufT = 0; this.flashT = 0; this.noCeT = 0; this.anim = Math.random() * 100;
     this.pose = poseCopy(POSES.idle); this.buffs = {}; this.victory = false; this.eyesOpen = 0;
     this.copied = null; this.adapt = {}; this.adaptSpin = 0; this.slowT = 0;
+    if (this.def.onReset) this.def.onReset(this);
   }
 
   get midY() { return this.y - 80 * this.scale; }

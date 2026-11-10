@@ -101,6 +101,9 @@ const Sound = {
       case 'clash': S.noise(1.0, 0.8, 4000, 'lowpass', 100); S.osc('sine', 800, 50, 1.0, 0.4); break;
       case 'gunshot': S.noise(0.12, 0.8, 3000, 'lowpass', 300); S.osc('square', 220, 60, 0.08, 0.2); break;
       case 'glass': S.noise(0.3, 0.6, 5000, 'highpass'); [2600, 3400, 4100].forEach((f, i) => S.osc('triangle', f, f * 0.9, 0.2, 0.06, i * 0.03)); S.osc('sine', 160, 60, 0.15, 0.3); break;
+      case 'shotgun': S.noise(0.45, 1.0, 2400, 'lowpass', 180); S.osc('sine', 130, 38, 0.3, 0.55); S.osc('square', 90, 40, 0.1, 0.18); break;
+      case 'click': S.noise(0.03, 0.5, 4000, 'highpass'); S.osc('square', 1800, 1200, 0.025, 0.06); break;
+      case 'reload': S.noise(0.06, 0.6, 2500, 'bandpass', null, 0, 4); S.noise(0.07, 0.7, 1600, 'bandpass', null, 0.12, 4); S.osc('square', 300, 200, 0.04, 0.08, 0.12); break;
       case 'glug': S.osc('sine', 220, 140, 0.09, 0.2); S.osc('sine', 180, 110, 0.09, 0.16, 0.1); break;
       case 'cash': [1320, 1760, 2640].forEach((f, i) => S.osc('triangle', f, f, 0.12, 0.08, i * 0.05)); S.noise(0.08, 0.2, 6000, 'highpass'); break;
     }
@@ -179,6 +182,33 @@ const Sound = {
 const hz = semi => 440 * Math.pow(2, semi / 12);   // semitones from A4
 
 const MUSIC = {
+  // An original mariachi-flavoured desert stomp in D minor: oom-pah bass, strummed guitar,
+  // a bright trumpet-ish lead and castanet clicks.
+  desert: {
+    bpm: 112,
+    chords: [-7, -7, 0, 0, -2, -7, 0, -7],
+    minor: [true, true, false, false, true, true, false, true],
+    lead: [
+      [5, null, 5, 4, 5, null, 0, null], [1, 0, -2, 0, 1, null, null, null],
+      [4, null, 4, 1, 4, null, 0, null], [-2, 0, 1, 4, 7, null, null, null],
+      [1, null, 1, 0, -2, null, -4, null], [-2, -4, -5, -7, -4, null, null, null],
+      [-5, -2, 0, 4, 7, null, 4, null], [5, null, 0, null, -7, null, null, null],
+    ],
+    step(S, tr, i, t) {
+      const s = i % 16, bar = Math.floor(i / 16) % 8, root = this.chords[bar];
+      // oom-pah: root on the beat, fifth on the 3
+      if (s === 0 || s === 8) S.note(tr, 'triangle', hz(root - 24), t, 0.22, 0.35);
+      if (s === 4 || s === 12) S.note(tr, 'triangle', hz(root - 17), t, 0.2, 0.28);
+      // strummed chord on the off-beats
+      if (s % 4 === 2) for (const [k, n] of [0, this.minor[bar] ? 3 : 4, 7].entries()) S.note(tr, 'triangle', hz(root + n), t + k * 0.012, 0.12, 0.04);
+      // castanets
+      if (s % 4 === 3 || s === 14) S.hiss(tr, t, 0.03, 0.16, 5000, 'bandpass');
+      if (s % 2 === 0) {
+        const n = this.lead[bar][s / 2];
+        if (n !== null) { S.note(tr, 'sawtooth', hz(n + 12), t, 0.18, 0.05); S.note(tr, 'square', hz(n + 12), t, 0.14, 0.035); }
+      }
+    },
+  },
   // An original Russian-disco stomp in A minor: four-on-the-floor kick, octave-bouncing bass,
   // a balalaika-ish square lead and a shouted "HEY!" — it speeds up every time it loops.
   // Drop your own copy of the song at music/moskau.mp3 and that will play instead.
