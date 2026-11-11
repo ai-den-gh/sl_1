@@ -71,6 +71,9 @@ kbd { display: inline-block; min-width: 1.8em; padding: 0.1em 0.4em; border: 1px
 
 /* ---------- story */
 .story-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.7em; width: 100%; }
+/* more chapters than fit on one screen: the story list scrolls */
+#scr-story { overflow-y: auto; }
+#scr-story .panel-wrap { margin: 1.2em auto 2em; }
 .story-card { --c: #fff; display: flex; flex-direction: column; text-align: left; background: var(--panel);
   border: 2px solid var(--line); border-top: 0.3em solid var(--c); border-radius: 0.4em; overflow: hidden; }
 .story-card { flex-direction: row !important; }

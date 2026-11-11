@@ -490,7 +490,9 @@ function drawStickman(ctx, def, pose, x, y, facing, o = {}) {
     ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, 6.283); ctx.fillStyle = color; ctx.fill();
     ctx.lineWidth = 2; ctx.strokeStyle = OL; ctx.stroke();
   };
-  const g = { ctx, sk, o, col, OL, dot, limb, def };
+  const g = { ctx, sk, o, col, OL, dot, limb, def, drop, pose };
+  // non-humanoid fighters (the Mechanical Hound) draw their whole body themselves
+  if (def.drawBody) { def.drawBody(g); ctx.restore(); return; }
   if (def.drawBack) def.drawBack(g);
   limb(sk.aB, col(lk._sh.top), 7); dot(sk.aB[2], 4.5, col(lk._sh.skin));
   limb(sk.lB, col(lk._sh.pants), 8); dot(sk.lB[2], 5, col(lk.shoe || '#15151b'));

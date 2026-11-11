@@ -4790,8 +4790,866 @@ const JUAN = {
 
 /* ---------------------------------------------------------------- roster */
 
-const CHARS = { gojo: GOJO, sukuna: SUKUNA, yuji: YUJI, yuta: YUTA, megumi: MEGUMI, g4: CURSE_G4, g3: CURSE_G3, finger: FINGER_BEARER, hanami: HANAMI, jogo: JOGO, mahito: MAHITO, choso: CHOSO, jin: JIN, ayane: AYANE, bao: BAO, daigo: DAIGO, wraith: WRAITH, lantern: LANTERN, crow: CROW, communism: COMMUNISM, capitalism: CAPITALISM, juan: JUAN };
-const ROSTER = ['yuji', 'gojo', 'sukuna', 'yuta', 'megumi', 'mahito', 'jogo', 'choso', 'jin', 'ayane', 'bao', 'daigo', 'communism', 'capitalism', 'juan', 'hanami', 'finger', 'g3', 'g4', 'wraith', 'lantern', 'crow'];
+/* ---------------------------------------------------------------- Montag: the fireman */
+
+const KERO = '#d8c86a', EMBER = '#ff7a1a';
+
+// Each Montag owns one invisible "field" entity that tracks the kerosene puddles he leaves,
+// burns the ones that catch, and keeps soaked opponents burning once they've been lit.
+function keroField(f) {
+  let e = World.entities.find(x => x.keroField && x.owner === f && !x.dead);
+  if (!e) e = spawnSummon(f, { keroField: true, x: World.left, y: 0, life: 1e9, pools: [], layer: 'back', tick: keroTick, render: keroRender });
+  return e;
+}
+
+// Kerosene lands on whatever surface is below it and joins (or starts) a puddle there.
+function addPool(f, x, y) {
+  const F = keroField(f);
+  const p = F.pools.find(q => q.y === y && Math.abs(q.x - x) < q.w / 2 + 24);
+  if (p) {
+    if (p.lit) { if (p.burn > 0) p.burn = Math.max(p.burn, 120); return; }   // spraying into a fire feeds it
+    const lo = Math.min(p.x - p.w / 2, x - 14), hi = Math.max(p.x + p.w / 2, x + 14);
+    if (hi - lo <= 280) { p.x = (lo + hi) / 2; p.w = hi - lo; }
+    p.life = 720;
+  } else if (F.pools.length < 40) F.pools.push({ x, y, w: 30, life: 720, burn: 0 });
+}
+
+// Sets fire to every puddle and every soaked opponent touching the given area.
+function ignite(f, x, y, rx, ry) {
+  const F = keroField(f);
+  for (const p of F.pools) {
+    if (p.lit || Math.abs(p.x - x) > rx + p.w / 2 || Math.abs(p.y - y) > ry) continue;
+    p.lit = true; p.burn = 220; Sound.play('fire');
+    FX.explosion(p.x, p.y - 20, Math.min(90, 30 + p.w / 3), ['#fff3b0', '#ffb04a', EMBER]);
+  }
+  for (const v of World.enemies(f)) {
+    if (v.state === 'ko' || !v.buffs.kero || Math.abs(v.x - x) > rx + 30 || Math.abs(v.midY - y) > ry + 90) continue;
+    delete v.buffs.kero;
+    v.buffs.onfire = 240;
+    FX.text(v.x, v.y - 190 * v.scale, 'IGNITED!', EMBER, 26, 55); FX.flash('#ff9a2a', 0.25);
+    Combat.hit(f, v, { dmg: 60, kb: 6, kby: -9, launch: true, unblockable: true, noScale: true, hitstop: 8, shake: 8, fx: 'fire', sfx: 'boom', color: EMBER, x: v.x, y: v.midY, dir: dirTo(f, v) });
+  }
+}
+
+function keroTick(F) {
+  const f = F.owner;
+  for (const p of F.pools) {
+    p.life--;
+    if (!p.lit) continue;
+    p.burn--;
+    // fire runs along the kerosene into touching puddles
+    for (const q of F.pools) if (!q.lit && q.y === p.y && Math.abs(q.x - p.x) < (q.w + p.w) / 2 + 8) { q.lit = true; q.burn = 220; }
+    if (p.burn % 3 === 0) FX.glow(p.x + U.rand(-p.w / 2, p.w / 2), p.y - U.rand(0, 20), U.pick([EMBER, '#ffd34d', '#ff4a1a']), U.rand(10, 18), 26, 0, -2.4);
+    if (p.burn % 15 === 0) for (const v of World.enemies(f)) {
+      if (v.state === 'ko' || Math.abs(v.y - p.y) > 6 || Math.abs(v.x - p.x) > p.w / 2 + 12) continue;
+      v.buffs.onfire = Math.max(v.buffs.onfire || 0, 90);
+      Combat.hit(f, v, { dmg: 14, kb: 1.5, stun: 10, unblockable: true, noScale: true, hitstop: 1, fx: 'fire', sfx: 'fire', color: EMBER, x: v.x, y: v.y - 30, dir: dirTo(F.owner, v) });
+    }
+  }
+  F.pools = F.pools.filter(p => (p.lit ? p.burn > 0 : p.life > 0));
+  // anyone set alight keeps burning for a while, and soaked opponents drip
+  for (const v of World.enemies(f)) {
+    if (v.state === 'ko') continue;
+    if (v.buffs.onfire) {
+      v.hp = Math.max(1, v.hp - 0.45);
+      if (World.frame % 3 === 0) FX.glow(v.x + U.rand(-16, 16), v.y - U.rand(20, 150) * v.scale, U.pick([EMBER, '#ffd34d']), 12, 20, 0, -2);
+    } else if (v.buffs.kero && World.frame % 8 === 0) FX.add({ type: 'glow', x: v.x + U.rand(-14, 14), y: v.y - U.rand(40, 140) * v.scale, vx: 0, vy: 1.5, life: 20, size: 3, color: KERO, grav: 0.2, drag: 1 });
+  }
+}
+
+function keroRender(ctx, F) {
+  for (const p of F.pools) {
+    const a = p.lit ? 1 : Math.min(1, p.life / 90);
+    ctx.save(); ctx.globalAlpha = 0.75 * a;
+    ctx.fillStyle = p.lit ? '#3a1a0a' : 'rgba(216,200,106,0.7)';
+    ctx.beginPath(); ctx.ellipse(p.x, p.y + 1, p.w / 2, 4, 0, 0, 6.283); ctx.fill();
+    if (!p.lit) { ctx.fillStyle = 'rgba(160,220,255,0.35)'; ctx.beginPath(); ctx.ellipse(p.x - p.w * 0.15, p.y, p.w * 0.2, 1.5, 0, 0, 6.283); ctx.fill(); }
+    else {
+      // licking flames along the puddle
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.min(1, p.burn / 30);
+      for (let x = p.x - p.w / 2 + 6; x < p.x + p.w / 2; x += 12) {
+        const h = 26 + Math.sin(World.frame * 0.4 + x) * 10 + Math.sin(World.frame * 0.17 + x * 0.3) * 8;
+        const g = ctx.createLinearGradient(0, p.y, 0, p.y - h);
+        g.addColorStop(0, 'rgba(255,200,80,0.9)'); g.addColorStop(0.5, 'rgba(255,110,30,0.7)'); g.addColorStop(1, 'rgba(255,40,10,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x - 8, p.y); ctx.quadraticCurveTo(x - 4, p.y - h * 0.6, x, p.y - h); ctx.quadraticCurveTo(x + 4, p.y - h * 0.6, x + 8, p.y); ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+}
+
+// One drop of kerosene from the hose. It only stuns and soaks — fire is what makes it hurt.
+function sprayDrop(f) {
+  const h = handPos(f);
+  spawnProj(f, {
+    x: h.x + f.facing * 22, y: h.y - 2, vx: f.facing * U.rand(11, 14) + f.vx * 0.3, vy: U.rand(-2.6, 0.4), r: 9, life: 80,
+    tick(e) {
+      e.vy += 0.35;
+      for (const v of World.enemies(f)) {
+        if (v.state === 'ko' || v.invuln > 0 || !U.circleRect(e.x, e.y, e.r, v.hurtbox())) continue;
+        v.buffs.kero = 420;
+        if (!v.buffs.onfire && !(v.state === 'block' && v.facing === -Math.sign(e.vx))) { v.applyStun(16); v.vx += Math.sign(e.vx) * 0.5; }
+        if (Math.random() < 0.3) Sound.play('glug');
+        FX.add({ type: 'glow', x: e.x, y: e.y, vx: -e.vx * 0.1, vy: -1, life: 14, size: 4, color: KERO, grav: 0.3, drag: 0.95 });
+        e.kill('hit'); return;
+      }
+      const gy = World.groundAt(e.x, e.y - e.vy);
+      if (e.y >= gy) { addPool(f, e.x, gy); e.kill('ground'); }
+    },
+    render(ctx, e) {
+      ctx.save(); ctx.fillStyle = 'rgba(216,200,106,0.85)';
+      ctx.beginPath(); ctx.ellipse(e.x, e.y, 5, 3.5, Math.atan2(e.vy, e.vx), 0, 6.283); ctx.fill();
+      ctx.restore();
+    },
+  });
+}
+
+const MONTAG = {
+  id: 'montag', name: 'Montag', short: 'MONTAG', title: 'The Fireman', kanji: '焚書', color: EMBER,
+  style: 'Soak, then burn. Hold K to hose the opponent and the floor down with kerosene (it only stuns), then light it up with his fire techniques.',
+  bio: 'A fireman whose job is not to put fires out but to start them. His helmet says 451 — the temperature at which paper catches fire.',
+  passive: { name: 'Kerosene Tank', desc: 'Hold K to spray kerosene from his hose: it stuns and soaks whoever it hits and pools on the floor and platforms, but does no damage on its own. Any fire technique ignites soaked opponents (a 60-damage burst that keeps burning) and sets the puddles ablaze. The tank (shown over his head) refills by itself.' },
+  hp: 1000, speed: 1.0, shoulderW: 16, hipW: 12,
+  melee: { power: 1.0, weaponName: 'Hose', reach: 6 },
+  look: { skin: '#e0b896', top: '#62666e', pants: '#4e525a', accent: EMBER, shoe: '#16161a' },
+  aiStyle: { pref: 160 },
+  // the CPU sprays from mid range when the tank has kerosene in it
+  aiHeavy: (f, o, dist) => f.kero > 30 && dist > 90 && dist < 330 && Math.abs(o.y - f.y) < 120,
+  onReset(f) { f.kero = 100; f.keroT = 0; },
+  passiveTick(f) {
+    if (f.keroT > 0) f.keroT--;
+    else if (f.kero < 100) f.kero = Math.min(100, f.kero + 0.4);
+  },
+  moveOverrides: {
+    // K: hold to spray kerosene
+    heavy: {
+      startup: 6, active: 0, recovery: 0, total: 200, lunge: 0, hitbox: null, hit: null, swing: null, sfx: null, poses: ['point', 'point'],
+      getPose: (f, fr) => { const p = poseCopy(POSES.point); p.aF[1] += Math.sin(fr * 0.6) * 4; return p; },
+      onFrame(f, fr) {
+        const held = f.input && f.input.held && f.input.held.heavy;
+        if (fr >= 6 && f.kero < 1 && !f.mvars.done) { f.mvars.done = fr; Sound.play('click'); FX.text(f.x, f.y - 200 * f.scale, '*tank empty*', '#cfcfd8', 16, 40); }
+        if (!f.mvars.done && (fr >= 196 || (fr >= 20 && !held))) f.mvars.done = fr;
+        if (f.mvars.done) { if (fr - f.mvars.done >= 8) f.endMove(); return; }
+        if (fr < 6) return;
+        f.kero = Math.max(0, f.kero - 1.4); f.keroT = 50;
+        sprayDrop(f);
+        if (fr % 2) sprayDrop(f);
+        f.vx -= f.facing * 0.15;
+      },
+    },
+  },
+  // the tank gauge floating over his helmet
+  drawAura(ctx, f) {
+    if (f.state === 'ko' || f.kero == null) return;
+    const h = headPos(f), y = h.y - 64 * f.scale, w = 40;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(h.x - w / 2 - 2, y - 2, w + 4, 8);
+    ctx.fillStyle = f.kero < 25 && World.frame % 20 < 10 ? '#ff4a3a' : KERO; ctx.fillRect(h.x - w / 2, y, w * f.kero / 100, 4);
+    ctx.restore();
+  },
+  // the kerosene tank strapped to his back
+  drawBack(g) {
+    const { ctx, sk, col, OL } = g, lt = Math.atan2(sk.td[0], -sk.td[1]);
+    ctx.save(); ctx.rotate(lt);
+    ctx.fillStyle = col('#a8281a'); ctx.strokeStyle = OL; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.roundRect(-30, -46, 16, 40, 7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = col('#d8c050'); ctx.fillRect(-29, -30, 14, 4);
+    ctx.restore();
+  },
+  // gray turnout coat, reflective bands and a salamander on the chest
+  drawTorso(g) {
+    const { ctx, sk, col, OL, o } = g, lt = Math.atan2(sk.td[0], -sk.td[1]), L = Math.hypot(sk.sh[0], sk.sh[1]);
+    ctx.save(); ctx.rotate(lt);
+    ctx.beginPath(); ctx.moveTo(-17, -L - 2); ctx.lineTo(17, -L - 2); ctx.lineTo(19, 14); ctx.lineTo(-19, 14); ctx.closePath();
+    ctx.fillStyle = col('#62666e'); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = OL; ctx.stroke();
+    if (!o.white && !o.tint) {
+      ctx.fillStyle = '#e8e070'; ctx.fillRect(-18, 2, 37, 4); ctx.fillStyle = '#c8c8d0'; ctx.fillRect(-18, 3, 37, 1.5);
+      ctx.fillStyle = '#2a2a30'; ctx.fillRect(-1, -L, 2, L + 12);           // coat closure
+      for (let y = -L + 10; y < 8; y += 12) { ctx.fillStyle = '#c8c8d0'; ctx.fillRect(2, y, 4, 3); }
+      // the salamander: a curling orange lizard
+      ctx.save(); ctx.translate(9, -L * 0.62);
+      ctx.strokeStyle = EMBER; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(-6, 6); ctx.quadraticCurveTo(-2, -2, 4, -4); ctx.quadraticCurveTo(8, -6, 7, -10); ctx.stroke();
+      ctx.lineWidth = 1.6; lineTo2(ctx, [-3, 2], [-7, -1]); lineTo2(ctx, [-2, 3], [0, 7]); lineTo2(ctx, [3, -4], [1, -8]); lineTo2(ctx, [4, -3], [8, -1]);
+      ctx.fillStyle = EMBER; ctx.beginPath(); ctx.arc(7, -11, 2.4, 0, 6.283); ctx.fill();
+      ctx.strokeStyle = '#ffd34d'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, 0, 11, 0, 6.283); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+  },
+  // a black fire helmet with a long back brim and a 451 badge
+  drawHead(g) {
+    const { ctx, sk, col, OL, o } = g, [hx, hy] = sk.head, r = LIMB.headR, plain = o.white || o.tint;
+    headCircle(g, hx, hy, r, '#e0b896');
+    if (!plain) {
+      eyeDots(g, [[hx + 7, hy + 1, 2.4, '#ffffff', '#1a1a22'], [hx + 12.5, hy + 1, 2, '#ffffff', '#1a1a22']]);
+      ctx.strokeStyle = '#3a2a20'; ctx.lineWidth = 1.5; lineTo2(ctx, [hx + 5, hy - 3], [hx + 10, hy - 3.5]);
+      ctx.strokeStyle = '#8a4a3a'; ctx.beginPath(); ctx.moveTo(hx + 7, hy + 9); ctx.lineTo(hx + 13, hy + 8.5); ctx.stroke();
+      ctx.fillStyle = 'rgba(40,30,30,0.25)'; ctx.fillRect(hx + 3, hy + 3, 10, 2);   // soot smudge
+    }
+    ctx.strokeStyle = OL; ctx.lineWidth = 2.5; ctx.fillStyle = col('#1e1e24');
+    // back brim, dome, front brim
+    ctx.beginPath(); ctx.moveTo(hx - r - 14, hy - 1); ctx.quadraticCurveTo(hx - r - 4, hy - 8, hx - 4, hy - 8); ctx.lineTo(hx - 2, hy - 4); ctx.quadraticCurveTo(hx - r - 2, hy - 4, hx - r - 14, hy - 1); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(hx - r - 2, hy - 5); ctx.quadraticCurveTo(hx - r, hy - r - 12, hx + 2, hy - r - 12); ctx.quadraticCurveTo(hx + r + 2, hy - r - 10, hx + r + 3, hy - 5); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(hx + r - 2, hy - 6); ctx.lineTo(hx + r + 8, hy - 4); ctx.lineTo(hx + r + 6, hy - 1); ctx.lineTo(hx + r - 4, hy - 3); ctx.closePath(); ctx.fill(); ctx.stroke();
+    if (!plain) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1.5; for (const d of [-6, 0, 6]) { ctx.beginPath(); ctx.moveTo(hx + d, hy - r - 11); ctx.quadraticCurveTo(hx + d * 1.4, hy - 12, hx + d * 1.5, hy - 6); ctx.stroke(); }
+    }
+    // the front shield badge reading 451
+    ctx.fillStyle = col('#d8d0b8'); ctx.strokeStyle = OL; ctx.lineWidth = 1.5;
+    const bx = hx + 9, by = hy - r - 5;
+    ctx.beginPath(); ctx.moveTo(bx - 9, by - 9); ctx.lineTo(bx + 9, by - 9); ctx.lineTo(bx + 9, by + 2); ctx.quadraticCurveTo(bx, by + 9, bx - 9, by + 2); ctx.closePath(); ctx.fill(); ctx.stroke();
+    if (!plain) {
+      ctx.fillStyle = '#b01a1a'; ctx.font = '900 9px Impact, "Arial Narrow", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('451', bx, by - 2); ctx.textBaseline = 'alphabetic';
+    }
+  },
+  // the hose nozzle in his hand, the hose running back to the tank
+  drawWeapon(g) {
+    const { ctx, sk, col, OL } = g, h = sk.aF[2], ang = armDir(sk.aF);
+    const lt = Math.atan2(sk.td[0], -sk.td[1]), tx = -22 * Math.cos(lt) + 18 * Math.sin(lt), ty = -22 * Math.sin(lt) - 18 * Math.cos(lt);
+    ctx.save(); ctx.lineCap = 'round';
+    ctx.strokeStyle = OL; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.quadraticCurveTo(tx - 10, 30, h[0] - Math.cos(ang) * 6, h[1] - Math.sin(ang) * 6); ctx.stroke();
+    ctx.strokeStyle = col('#2a2a30'); ctx.lineWidth = 4; ctx.stroke();
+    ctx.translate(h[0], h[1]); ctx.rotate(ang);
+    ctx.fillStyle = col('#c8a040'); ctx.strokeStyle = OL; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(-4, -4); ctx.lineTo(16, -3); ctx.lineTo(22, -2); ctx.lineTo(22, 2); ctx.lineTo(16, 3); ctx.lineTo(-4, 4); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = col('#8a6a20'); ctx.fillRect(4, -5, 4, 10);
+    ctx.restore();
+  },
+  abilities: [
+    {
+      name: 'Match Flick', icon: '燐', color: '#ffd34d', cost: 10, cd: 110, ai: { min: 80, max: 600 },
+      desc: 'Strikes a match and flicks it in an arc. It barely singes on its own — but wherever it lands, kerosene goes up, and a soaked opponent it touches is ignited.',
+      move: {
+        id: 'match', kind: 'special', startup: 10, active: 1, recovery: 12, poses: ['castW', 'cast'],
+        onFrame(f, fr) {
+          if (fr !== 10) return;
+          Sound.play('click');
+          spawnProj(f, {
+            x: f.x + f.facing * 26, y: f.y - 130 * f.scale, vx: f.facing * 9, vy: -5, r: 10, life: 120, rot: 0,
+            hits: { dmg: 10, kb: 2, stun: 12, fx: 'fire', color: EMBER, sfx: 'fire', hitstop: 2 },
+            tick(e) {
+              e.vy += 0.32; e.rot += 0.35;
+              if (e.age % 2 === 0) FX.glow(e.x, e.y, '#ffb04a', 6, 10, 0, -0.5);
+              const gy = World.groundAt(e.x, e.y - e.vy);
+              if (e.y >= gy) { e.y = gy; e.kill('ground'); }
+            },
+            onHit(e, t) { ignite(f, t.x, t.midY, 30, 60); },
+            onEnd(e, why) { ignite(f, e.x, e.y, 50, 50); FX.spark(e.x, e.y, '#ffd34d', 6, 4); },
+            render(ctx, e) {
+              ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.rot);
+              ctx.strokeStyle = '#e8d8b0'; ctx.lineWidth = 2; lineTo2(ctx, [-7, 0], [5, 0]);
+              ctx.fillStyle = '#c4222f'; ctx.beginPath(); ctx.arc(6, 0, 2.5, 0, 6.283); ctx.fill();
+              ctx.restore();
+              glowOrb(ctx, e.x, e.y, 5, '#fff3b0', EMBER, 0.8);
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Flamethrower', icon: '炎', color: EMBER, cost: 22, cd: 260, ai: { min: 0, max: 260 },
+      desc: 'Switches the hose to fire and pours a roaring stream of flame ahead for most of a second, burning anyone in it and igniting every drop of kerosene it touches.',
+      move: {
+        id: 'flamethrower', kind: 'special', startup: 10, active: 0, recovery: 0, total: 64, poses: ['point', 'point'],
+        onFrame(f, fr) {
+          if (fr < 10 || fr > 54) return;
+          const h = handPos(f), reach = 260;
+          if (fr % 6 === 0) Sound.play('fire');
+          for (let i = 0; i < 3; i++) {
+            const k = Math.random();
+            FX.add({ type: 'glow', x: h.x + f.facing * (20 + k * 30), y: h.y + U.rand(-4, 4), vx: f.facing * U.rand(9, 13), vy: U.rand(-1.4, 1.4), life: 22, size: U.rand(10, 20), color: U.pick(['#fff3b0', '#ffb04a', EMBER, '#ff3a1a']), drag: 0.97 });
+          }
+          ignite(f, h.x + f.facing * reach / 2, h.y + 40, reach / 2, 130);
+          if (fr % 8 === 0) for (const v of World.enemies(f)) {
+            const dx = (v.x - h.x) * f.facing;
+            if (v.state !== 'ko' && dx > 0 && dx < reach && Math.abs(v.midY - h.y) < 90)
+              Combat.hit(f, v, { dmg: 11, kb: 2, stun: 14, noScale: true, hitstop: 1, fx: 'fire', sfx: 'fire', color: EMBER, x: v.x, y: v.midY, dir: f.facing });
+          }
+          f.vx -= f.facing * 0.1;
+        },
+      },
+    },
+    {
+      name: 'Book Pyre', icon: '書', color: '#c8a050', cost: 32, cd: 420, ai: { min: 120, max: 520 },
+      desc: 'Hurls an armful of books that bursts into a pyre where it lands: a column of fire that burns for three seconds and lights up all kerosene nearby.',
+      move: {
+        id: 'pyre', kind: 'special', startup: 14, active: 1, recovery: 18, poses: ['heavyW', 'cast'],
+        onFrame(f, fr) {
+          if (fr !== 14) return;
+          Sound.play('whoosh');
+          spawnProj(f, {
+            x: f.x + f.facing * 30, y: f.y - 140 * f.scale, vx: f.facing * 8, vy: -7, r: 16, life: 140, books: [0, 1, 2, 3].map(i => ({ dx: U.rand(-14, 14), dy: U.rand(-10, 10), c: U.pick(['#a8281a', '#2a4a8a', '#3a6a3a', '#c8a050', '#5a3a6a']), r: U.rand(0, 6) })),
+            tick(e) {
+              e.vy += 0.4;
+              const gy = World.groundAt(e.x, e.y - e.vy);
+              if (e.y >= gy) { e.y = gy; e.kill('ground'); }
+            },
+            hits: { dmg: 20, kb: 3, stun: 16, color: '#c8a050' },
+            onEnd(e) {
+              const x = e.x, y = World.groundAt(e.x, e.y - 1);
+              Sound.play('boom'); FX.explosion(x, y - 30, 80, ['#fff3b0', '#ffb04a', EMBER]); FX.shake(6);
+              ignite(f, x, y, 170, 90);
+              spawnSummon(f, {
+                x, y, life: 180,
+                tick(s) {
+                  if (s.age % 2 === 0) FX.glow(s.x + U.rand(-30, 30), s.y - U.rand(0, 40), U.pick(['#fff3b0', '#ffb04a', EMBER]), U.rand(14, 22), 30, U.rand(-0.4, 0.4), -3.2);
+                  if (s.age % 10 === 0) for (const v of World.enemies(f)) if (v.state !== 'ko' && Math.abs(v.x - s.x) < 55 && v.y > s.y - 200 && v.y <= s.y + 4)
+                    Combat.hit(f, v, { dmg: 16, kb: 4, kby: -3, stun: 14, noScale: true, hitstop: 2, fx: 'fire', sfx: 'fire', color: EMBER, x: v.x, y: v.midY, dir: v.x >= s.x ? 1 : -1 });
+                  if (s.age % 30 === 0) ignite(f, s.x, s.y, 80, 90);
+                },
+                render(ctx, s) {
+                  ctx.save(); ctx.fillStyle = '#2a1a10';
+                  for (let i = 0; i < 6; i++) { ctx.save(); ctx.translate(s.x - 24 + i * 9, s.y - 4 - (i % 2) * 6); ctx.rotate((i - 2.5) * 0.2); ctx.fillRect(-8, -4, 16, 8); ctx.restore(); }
+                  ctx.restore();
+                },
+              });
+            },
+            render(ctx, e) {
+              for (const b of e.books) { ctx.save(); ctx.translate(e.x + b.dx, e.y + b.dy); ctx.rotate(b.r + e.age * 0.2); ctx.fillStyle = b.c; ctx.fillRect(-9, -6, 18, 12); ctx.fillStyle = '#f4ead0'; ctx.fillRect(-9, -4, 18, 2); ctx.restore(); }
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Salamander', icon: '車', color: '#c4222f', cost: 34, cd: 600, ground: true, ai: { min: 0, max: 1280 },
+      desc: 'Radios the firehouse: the Salamander, his fire engine, comes roaring along his floor from behind him, ramming and launching anyone in its path and setting every drop of kerosene it passes alight.',
+      move: {
+        id: 'salamander', kind: 'special', startup: 16, active: 1, recovery: 14, poses: ['point', 'castW'],
+        onFrame(f, fr) {
+          if (fr !== 16) return;
+          Sound.play('siren'); FX.text(f.x, f.y - 200, 'SALAMANDER!', '#c4222f', 22, 50);
+          const dir = f.facing, y = f.y;
+          spawnSummon(f, {
+            x: dir > 0 ? Cam.x - 200 : Cam.x + Cam.w + 200, y, dir, life: 200, hitSet: new Set(),
+            tick(e) {
+              e.x += e.dir * 17;
+              if (e.age % 2 === 0) { FX.dust(e.x - e.dir * 80, e.y, 2); ignite(f, e.x + e.dir * 60, e.y, 70, 30); }
+              for (const v of World.enemies(f)) {
+                if (e.hitSet.has(v) || v.state === 'ko' || Math.abs(v.x - e.x) > 90 || v.y < e.y - 150 || v.y > e.y + 4) continue;
+                e.hitSet.add(v);
+                Combat.hit(f, v, { dmg: 75, kb: 16, kby: -14, launch: true, hitstop: 10, shake: 10, sfx: 'boom', color: '#c4222f', x: v.x, y: v.midY, dir: e.dir });
+              }
+              if ((e.dir > 0 && e.x > World.right + 300) || (e.dir < 0 && e.x < World.left - 300)) e.kill('gone');
+            },
+            render(ctx, e) {
+              ctx.save(); ctx.translate(e.x, e.y); ctx.scale(e.dir, 1);
+              ctx.strokeStyle = '#07070c'; ctx.lineWidth = 3;
+              ctx.fillStyle = '#c4222f'; ctx.fillRect(-110, -78, 160, 62); ctx.strokeRect(-110, -78, 160, 62);
+              ctx.beginPath(); ctx.moveTo(50, -16); ctx.lineTo(50, -92); ctx.lineTo(88, -92); ctx.lineTo(104, -56); ctx.lineTo(104, -16); ctx.closePath(); ctx.fill(); ctx.stroke();
+              ctx.fillStyle = '#bfe0ff'; ctx.fillRect(62, -84, 30, 22);
+              ctx.fillStyle = '#d8d8e0'; ctx.fillRect(-104, -100, 140, 8); for (let x = -98; x < 34; x += 14) ctx.fillRect(x, -104, 3, 16);
+              ctx.fillStyle = '#ffd34d'; ctx.fillRect(-110, -40, 214, 5);
+              ctx.font = '900 16px Impact, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#ffd34d'; ctx.fillText('451', -30, -50);
+              const on = Math.floor(e.age / 5) % 2; ctx.fillStyle = on ? '#ff3a3a' : '#3a8aff'; ctx.fillRect(56, -100, 10, 8); ctx.fillStyle = on ? '#3a8aff' : '#ff3a3a'; ctx.fillRect(72, -100, 10, 8);
+              for (const wx of [-80, -40, 80]) { ctx.save(); ctx.translate(wx, -12); ctx.rotate(e.age * 0.6 * e.dir); ctx.fillStyle = '#1a1a20'; ctx.beginPath(); ctx.arc(0, 0, 13, 0, 6.283); ctx.fill(); ctx.fillStyle = '#9aa0a8'; ctx.fillRect(-2, -10, 4, 20); ctx.restore(); }
+              ctx.restore();
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Fahrenheit 451', icon: '焚', color: EMBER, cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 900 },
+      desc: 'ULTIMATE. Floods the whole floor around him with kerosene and drenches everyone nearby — then drops a single match. Everything goes up at once.',
+      move: {
+        id: 'f451', kind: 'ult', startup: 70, active: 0, recovery: 20, poses: ['point', 'castW'],
+        getPose: (f, fr) => (fr < 50 ? POSES.point : POSES.castW),
+        onStart(f) { f.invuln = 90; FX.banner('ULTIMATE', 'FAHRENHEIT 451', EMBER, 100); Sound.play('charge'); },
+        onFrame(f, fr) {
+          f.invuln = Math.max(f.invuln, 2);
+          if (fr < 40 && fr % 2 === 0) {
+            // a wide arc of kerosene on every surface within reach
+            for (let i = 0; i < 6; i++) {
+              const x = f.x + U.rand(-700, 700);
+              addPool(f, x, World.groundAt(x, f.y - 300));
+              addPool(f, x, World.groundAt(x, f.y - 1));
+            }
+            FX.add({ type: 'glow', x: f.x + U.rand(-500, 500), y: f.y - U.rand(150, 300), vx: 0, vy: 4, life: 30, size: 3, color: KERO, grav: 0.3, drag: 1 });
+          }
+          if (fr === 40) for (const v of World.enemies(f)) if (v.state !== 'ko' && Math.abs(v.x - f.x) < 800) { v.buffs.kero = 420; FX.text(v.x, v.y - 180, 'DRENCHED', KERO, 18, 40); }
+          if (fr === 56) { Sound.play('click'); FX.text(f.x, f.y - 210, '*strike*', '#ffd34d', 18, 30); }
+          if (fr === 66) {
+            FX.flash('#ff9a2a', 0.7); FX.shake(24); Sound.play('boom');
+            ignite(f, f.x, f.y, 900, 600);
+            for (const v of World.enemies(f)) if (v.state !== 'ko' && Math.abs(v.x - f.x) < 800)
+              Combat.hit(f, v, { dmg: 70, kb: 10, kby: -12, launch: true, unblockable: true, sureHit: true, noScale: true, hitstop: 12, fx: 'fire', sfx: 'boom', color: EMBER, x: v.x, y: v.midY, dir: dirTo(f, v) });
+          }
+        },
+      },
+    },
+  ],
+};
+
+// The firehouse's Mechanical Hound: an eight-legged robot hunter, and Montag's nemesis.
+const HOUND_GREEN = '#7aff9a';
+const MHOUND = {
+  id: 'mhound', name: 'Mechanical Hound', short: 'M. HOUND', title: 'The Firehouse Hunter', kanji: '機械犬', color: '#9ad8a8',
+  style: 'Relentless and fast. Darts in with a sedative needle, pounces from range and never loses the scent.',
+  bio: 'A machine of brass, steel and copper wire that sleeps in the firehouse. Set it on a scent and it does not stop until its needle finds its mark.',
+  passive: { name: 'The Scent', desc: 'Eight legs: moves 30% faster than a person. It hunts by smell, so hiding spots don\'t fool it, and its needle hits leave the opponent drowsy (slowed).' },
+  hp: 1050, speed: 1.3, seesHidden: true, portraitHead: [50, -50], melee: { power: 0.95, weapon: 'claw', reach: 8 },
+  look: { skin: '#9aa0a8', top: '#7a8088', pants: '#5a6068', accent: HOUND_GREEN, shoe: '#2a2e34' }, aiStyle: { pref: 80 },
+  onDealHit(f, t) { t.buffs.mud = Math.max(t.buffs.mud || 0, 40); },
+  drawBody(g) {
+    const { ctx, sk, col, OL, o, drop } = g, fi = o.fighter, t = fi ? fi.anim : performance.now() / 16;
+    const moving = fi && (fi.state === 'walk' || fi.state === 'move' || fi.state === 'air'), striking = fi && fi.state === 'move';
+    const lean = Math.max(-10, Math.min(16, sk.head[0] * 0.6)), ph = t * (moving ? 0.45 : 0.08), plain = o.white || o.tint;
+    const by = -22, hx = 46 + lean, hy = -58 + (striking ? 10 : 0) + Math.sin(t * 0.06) * 2;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    // eight legs: four pairs, far side first
+    for (const far of [1, 0]) {
+      for (let i = 0; i < 4; i++) {
+        const lx = -34 + i * 20 + (far ? 6 : 0), s = Math.sin(ph + i * 1.6 + far * Math.PI) * (moving ? 10 : 2);
+        const kx = lx + 8 + s * 0.4, ky = by + 6 - Math.abs(s) * 0.6 - 14, fx = lx + s, fy = drop;
+        ctx.strokeStyle = OL; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(lx, by + 4); ctx.lineTo(kx, ky + 12); ctx.lineTo(fx, fy); ctx.stroke();
+        ctx.strokeStyle = col(far ? '#5a6068' : '#9aa0a8'); ctx.lineWidth = 3; ctx.stroke();
+        if (!plain) { ctx.fillStyle = '#c8a040'; ctx.beginPath(); ctx.arc(kx, ky + 12, 2.2, 0, 6.283); ctx.fill(); }
+      }
+    }
+    // segmented tail
+    ctx.strokeStyle = OL; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(-44, by - 4);
+    for (let k = 1; k <= 4; k++) ctx.lineTo(-44 - k * 9, by - 4 - k * 6 + Math.sin(t * 0.15 + k) * 3); ctx.stroke();
+    ctx.strokeStyle = col('#9aa0a8'); ctx.lineWidth = 2.5; ctx.stroke();
+    // body: a long riveted shell with copper wiring
+    ctx.fillStyle = col('#8a9098'); ctx.strokeStyle = OL; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.ellipse(0, by, 48, 15, -0.05, 0, 6.283); ctx.fill(); ctx.stroke();
+    if (!plain) {
+      ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.beginPath(); ctx.ellipse(-4, by - 7, 36, 4, -0.05, 0, 6.283); ctx.fill();
+      ctx.fillStyle = '#5a6068'; for (let x = -36; x <= 36; x += 12) { ctx.beginPath(); ctx.arc(x, by + 6, 1.8, 0, 6.283); ctx.fill(); }
+      ctx.strokeStyle = '#c87a3a'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(-30, by + 2); ctx.bezierCurveTo(-10, by + 10, 10, by - 6, 34, by + 2); ctx.stroke();
+    }
+    // neck and head
+    ctx.strokeStyle = OL; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(34, by - 6); ctx.lineTo(hx - 6, hy + 8); ctx.stroke();
+    ctx.strokeStyle = col('#7a8088'); ctx.lineWidth = 5; ctx.stroke();
+    ctx.fillStyle = col('#9aa0a8'); ctx.strokeStyle = OL; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(hx - 14, hy - 8); ctx.lineTo(hx + 14, hy - 6); ctx.lineTo(hx + 22, hy + 2); ctx.lineTo(hx + 12, hy + 9); ctx.lineTo(hx - 12, hy + 10); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(hx - 10, hy - 8); ctx.lineTo(hx - 16, hy - 20); ctx.lineTo(hx - 4, hy - 9); ctx.fill(); ctx.stroke();
+    // the needle in its snout, extended when it strikes
+    const nl = striking ? 26 : 8;
+    ctx.strokeStyle = col('#e8e8f0'); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(hx + 20, hy + 3); ctx.lineTo(hx + 20 + nl, hy + 4); ctx.stroke();
+    if (!plain) {
+      // glowing green eyes
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const eg = ctx.createRadialGradient(hx + 8, hy - 1, 0, hx + 8, hy - 1, 10); eg.addColorStop(0, 'rgba(160,255,180,0.9)'); eg.addColorStop(1, 'rgba(60,255,120,0)');
+      ctx.fillStyle = eg; ctx.fillRect(hx - 4, hy - 13, 24, 24); ctx.restore();
+      ctx.fillStyle = HOUND_GREEN; ctx.beginPath(); ctx.arc(hx + 6, hy - 1, 2.6, 0, 6.283); ctx.arc(hx + 12, hy - 0.5, 2, 0, 6.283); ctx.fill();
+      ctx.fillStyle = '#2a2e34'; for (let k = 0; k < 3; k++) ctx.fillRect(hx - 8 + k * 6, hy + 4, 3, 2);
+    }
+  },
+  abilities: [
+    {
+      name: 'Sedative Needle', icon: '針', color: HOUND_GREEN, cost: 12, cd: 140, ai: { min: 40, max: 200 },
+      desc: 'Darts forward and jabs the needle in: light damage, but the opponent is left stunned and drowsy.',
+      move: {
+        id: 'needle', kind: 'special', startup: 8, active: 5, recovery: 18, lunge: 16, poses: ['jabW', 'jab'], sfx: 'dash',
+        hitbox: { x: 10, y: -90, w: 80, h: 70 }, hit: { dmg: 20, stunAdd: 50, kb: 2, hitstop: 6, fx: 'zap', sfx: 'zap', color: HOUND_GREEN },
+        onHit(f, t) { FX.text(t.x, t.y - 180, 'SEDATED', HOUND_GREEN, 18, 40); },
+      },
+    },
+    {
+      name: 'Pounce', icon: '跳', color: '#c8c8d0', cost: 20, cd: 220, ground: true, ai: { min: 150, max: 520 },
+      desc: 'Springs high on eight legs and lands right on the opponent, slamming them down.',
+      move: {
+        id: 'mpounce', kind: 'special', startup: 6, active: 0, recovery: 0, total: 90, keepVel: true, poses: ['jump', 'jump'],
+        onStart(f, t) { const dx = t ? t.x - f.x : f.facing * 300; f.vx = U.clamp(dx / 34, -14, 14); f.vy = -16; f.onGround = false; Sound.play('jump'); },
+        onFrame(f, fr) {
+          if (fr > 8 && f.onGround && !f.mvars.landed) {
+            f.mvars.landed = fr; FX.dust(f.x, f.y, 8); FX.shake(6); Sound.play('heavy');
+            for (const v of World.enemies(f)) if (near(v, f.x, f.y - 60, 80, 120)) Combat.hit(f, v, { dmg: 55, kb: 8, kby: -10, launch: true, hitstop: 8, x: v.x, y: v.midY, dir: dirTo(f, v) });
+          }
+          if (f.mvars.landed && fr - f.mvars.landed > 12) f.endMove();
+        },
+      },
+    },
+    {
+      name: 'Procaine Mist', icon: '霧', color: '#c8f0d0', cost: 25, cd: 320, ai: { min: 0, max: 220 },
+      desc: 'Hisses out a cloud of anaesthetic mist in front of it. Anyone caught inside is badly slowed and chipped for 3 seconds.',
+      move: {
+        id: 'mist', kind: 'special', startup: 12, active: 1, recovery: 16, poses: ['castW', 'cast'],
+        onFrame(f, fr) {
+          if (fr !== 12) return;
+          Sound.play('whoosh');
+          spawnSummon(f, {
+            x: f.x + f.facing * 110, y: f.y, life: 180,
+            tick(e) {
+              if (e.age % 3 === 0) FX.add({ type: 'glow', x: e.x + U.rand(-90, 90), y: e.y - U.rand(10, 150), vx: U.rand(-0.5, 0.5), vy: -0.4, life: 40, size: U.rand(14, 24), color: 'rgba(200,240,210,0.35)', drag: 0.98 });
+              for (const v of World.enemies(f)) if (v.state !== 'ko' && Math.abs(v.x - e.x) < 100 && v.y > e.y - 180 && v.y <= e.y + 4) {
+                v.buffs.mud = Math.max(v.buffs.mud || 0, 30);
+                if (e.age % 20 === 0) Combat.hit(f, v, { dmg: 8, kb: 0, stun: 6, noScale: true, hitstop: 0, quiet: true, color: '#c8f0d0', x: v.x, y: v.midY, dir: dirTo(f, v) });
+              }
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Scent Lock', icon: '嗅', color: HOUND_GREEN, cost: 30, cd: 600, ai: { min: 0, max: 1280 },
+      desc: 'Locks on to the opponent\'s scent: for 6 seconds it runs faster and hits harder, and it instantly leaps to the opponent\'s side.',
+      move: {
+        id: 'scent', kind: 'special', startup: 14, active: 1, recovery: 10, poses: ['castW', 'win'],
+        onFrame(f, fr, t) {
+          if (fr !== 14) return;
+          Sound.play('charge'); FX.text(f.x, f.y - 160, 'SCENT LOCKED', HOUND_GREEN, 20, 50);
+          f.buffs.redscale = Math.max(f.buffs.redscale || 0, 360);
+          if (t && t.state !== 'ko') {
+            FX.smoke(f.x, f.y - 30, '#9aa0a8', 6, 20, 14);
+            f.x = U.clamp(t.x - t.facing * 90, World.left + 30, World.right - 30); f.y = World.groundAt(f.x, t.y - 1); f.onGround = true; f.facing = t.x >= f.x ? 1 : -1;
+            FX.ring(f.x, f.y - 40, HOUND_GREEN, 60, 14, 3);
+          }
+        },
+      },
+    },
+    {
+      name: 'The Hunt', icon: '狩', color: HOUND_GREEN, cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 1280 },
+      desc: 'ULTIMATE. Becomes a silver blur, striking the opponent from alternating sides six times before driving the needle home for a long, heavy sedation.',
+      move: {
+        id: 'hunt', kind: 'ult', startup: 20, active: 0, recovery: 0, total: 110, poses: ['jab', 'jab'],
+        onStart(f) { f.invuln = 120; FX.banner('ULTIMATE', 'THE HUNT', HOUND_GREEN, 90); Sound.play('charge'); },
+        onFrame(f, fr, t) {
+          f.invuln = Math.max(f.invuln, 2);
+          if (!t || t.state === 'ko' || fr < 20) return;
+          if (fr < 92 && (fr - 20) % 12 === 0) {
+            const side = ((fr - 20) / 12) % 2 ? 1 : -1;
+            FX.slash(t.x, t.midY, side * 0.5, 110, HOUND_GREEN, 4, 10);
+            f.x = U.clamp(t.x + side * 70, World.left + 30, World.right - 30); f.y = t.onGround ? t.y : World.groundAt(f.x, t.y); f.facing = -side;
+            Combat.hit(f, t, { dmg: 18, stunAdd: 20, noScale: true, sureHit: true, hitstop: 3, fx: 'slash', sfx: 'slash', color: HOUND_GREEN, x: t.x, y: t.midY, dir: -side });
+          }
+          if (fr === 96) {
+            FX.flash(HOUND_GREEN, 0.4); FX.shake(14); FX.text(t.x, t.y - 200, 'INJECTED', HOUND_GREEN, 28, 60);
+            Combat.hit(f, t, { dmg: 70, stunAdd: 110, unblockable: true, sureHit: true, noScale: true, hitstop: 12, fx: 'zap', sfx: 'zap', color: HOUND_GREEN, x: t.x, y: t.midY, dir: f.facing });
+            t.buffs.mud = 300;
+          }
+        },
+      },
+    },
+  ],
+};
+
+/* ---------------------------------------------------------------- More cursed spirits */
+
+const HOUND = {
+  id: 'hound', name: 'Rot Hound', short: 'HOUND', title: 'Pack-Hunting Curse', kanji: '腐犬', color: '#c08a4a', curse: true,
+  style: 'Fast, fragile and never alone. Hounds rush in, howl to rally the pack and drag you to the floor.',
+  bio: 'Born from the fear of stray dogs in dark alleys. One is a nuisance. A pack is a death sentence.',
+  passive: { name: 'Pack Instinct', desc: 'Deals 12% more damage for every other hound still standing on its side.' },
+  hp: 420, speed: 1.3, scale: 0.85, melee: { power: 0.72, weapon: 'claw' },
+  look: curseLook('#8a6a4a', '#3a2a1a'), aiStyle: { pref: 70 },
+  dmgMult: f => 1 + 0.12 * World.fighters.filter(o => o !== f && o.team === f.team && o.def.id === 'hound' && o.state !== 'ko').length,
+  drawHead(g) {
+    const { ctx, sk, col, OL, o } = g, [hx, hy] = sk.head;
+    // long snout and torn ears
+    ctx.fillStyle = col('#8a6a4a'); ctx.strokeStyle = OL; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(hx + 6, hy - 6); ctx.lineTo(hx + 30, hy + 2); ctx.lineTo(hx + 28, hy + 10); ctx.lineTo(hx + 4, hy + 10); ctx.closePath(); ctx.fill(); ctx.stroke();
+    for (const s of [0, 1]) { ctx.beginPath(); ctx.moveTo(hx - 8 + s * 8, hy - 10); ctx.lineTo(hx - 14 + s * 6, hy - 30); ctx.lineTo(hx - 2 + s * 8, hy - 12); ctx.fill(); ctx.stroke(); }
+    headCircle(g, hx, hy, 14, '#8a6a4a');
+    if (o.white || o.tint) return;
+    ctx.fillStyle = '#f0e8d0'; for (let i = 0; i < 5; i++) { const x = hx + 10 + i * 4; ctx.beginPath(); ctx.moveTo(x, hy + 9); ctx.lineTo(x + 2, hy + 14); ctx.lineTo(x + 4, hy + 9); ctx.fill(); }
+    ctx.fillStyle = '#ffe36a'; ctx.beginPath(); ctx.arc(hx + 7, hy - 3, 2.6, 0, 6.283); ctx.fill();
+    ctx.fillStyle = '#5a3a20'; for (let i = 0; i < 3; i++) ctx.fillRect(hx - 10 + i * 5, hy + 2 + (i % 2) * 3, 3, 3);   // mange
+  },
+  abilities: [
+    { name: 'Pounce', icon: '襲', color: '#c08a4a', cost: 12, cd: 160, ai: { min: 60, max: 260 }, desc: 'A low, fast leap that bowls the opponent over.', move: lungeMove({ dmg: 38, lunge: 16, startup: 8 }) },
+    {
+      name: 'Rally Howl', icon: '吠', color: '#ffb04a', cost: 20, cd: 480, ai: { min: 0, max: 1280 },
+      desc: 'Throws back its head and howls: every curse on its side gets 15% faster and hits 15% harder for 5 seconds, and anyone close by is staggered.',
+      move: {
+        id: 'howl', kind: 'special', startup: 14, active: 1, recovery: 18, poses: ['castW', 'win'],
+        onFrame(f, fr) {
+          if (fr !== 14) return;
+          Sound.play('roar'); FX.text(f.x, f.y - 170, 'AROOOO!', '#ffb04a', 22, 45);
+          for (let i = 0; i < 3; i++) FX.ring(f.x, f.y - 100, '#ffb04a', 90 + i * 70, 20, 3);
+          for (const a of World.fighters) if (a.team === f.team && a.state !== 'ko') { a.buffs.redscale = Math.max(a.buffs.redscale || 0, 300); FX.spark(a.x, a.midY, '#ffb04a', 8, 5); }
+          for (const v of World.enemies(f)) if (near(v, f.x, f.midY, 160, 160)) Combat.hit(f, v, { dmg: 10, stunAdd: 22, kb: 4, x: v.x, y: v.midY, dir: dirTo(f, v) });
+        },
+      },
+    },
+    {
+      name: 'Drag Down', icon: '引', color: '#a8281a', cost: 25, cd: 320, ai: { min: 0, max: 130 },
+      desc: 'Clamps its jaws on the opponent and thrashes, savaging them three times before flinging them to the floor.',
+      move: {
+        id: 'dragdown', kind: 'special', startup: 9, active: 30, recovery: 16, hitEvery: 10, poses: ['jabW', 'jab'], sfx: 'bite',
+        hitbox: { x: 4, y: -110, w: 70, h: 60 }, hit: { dmg: 16, kb: 0.5, stun: 22, fx: 'slash', color: '#a8281a', noScale: true, hitstop: 3, blood: 4 },
+        onFrame(f, fr) { if (fr === 38) for (const v of World.enemies(f)) if (near(v, f.x + f.facing * 50, f.midY, 80, 90)) Combat.hit(f, v, { dmg: 22, kb: 6, kby: -6, launch: true, hitstop: 6, x: v.x, y: v.midY, dir: f.facing }); },
+      },
+    },
+  ],
+};
+
+const MIRROR = {
+  id: 'mirror', name: 'Mirror Curse', short: 'MIRROR', title: 'Curse of the Cracked Glass', kanji: '鏡霊', color: '#9ad8e8', curse: true,
+  style: 'Tricky and fragile. Sprays glass from range, blinks behind you, and turns your techniques back on you.',
+  bio: 'Seven years of bad luck, all at once. It lives in every cracked mirror and smiles a moment after you do.',
+  passive: { name: 'Seven Years', desc: 'Glass skin: takes 15% more damage, but every hit it lands slows the opponent for a moment.' },
+  hp: 820, speed: 1.05, melee: { power: 0.9 },
+  look: curseLook('#c8e8f0', '#4a6a7a'), aiStyle: { pref: 260, ranged: true },
+  onIncoming: (f, dmg) => ({ dmg: dmg * 1.15 }),
+  onDealHit(f, t) { t.buffs.mud = Math.max(t.buffs.mud || 0, 30); },
+  drawHead(g) {
+    const { ctx, sk, col, OL, o } = g, [hx, hy] = sk.head;
+    // a hand mirror for a face, cracked down the middle
+    ctx.fillStyle = col('#6a8a9a'); ctx.strokeStyle = OL; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(hx, hy - 2, 17, 21, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = col('#d8f4fc'); ctx.beginPath(); ctx.ellipse(hx, hy - 2, 13, 17, 0, 0, 6.283); ctx.fill();
+    if (o.white || o.tint) return;
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.beginPath(); ctx.ellipse(hx - 5, hy - 8, 3, 7, -0.4, 0, 6.283); ctx.fill();
+    ctx.strokeStyle = '#2a4a5a'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(hx + 2, hy - 18); ctx.lineTo(hx - 2, hy - 6); ctx.lineTo(hx + 4, hy + 2); ctx.lineTo(hx, hy + 14); ctx.moveTo(hx - 2, hy - 6); ctx.lineTo(hx - 9, hy - 2); ctx.stroke();
+    ctx.fillStyle = '#ff3a6a'; ctx.beginPath(); ctx.arc(hx + 6, hy - 4, 2.2, 0, 6.283); ctx.fill();
+    ctx.strokeStyle = '#ff3a6a'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(hx + 3, hy + 4, 6, 0.2, 2.6); ctx.stroke();
+  },
+  abilities: [
+    {
+      name: 'Shard Spray', icon: '片', color: '#9ad8e8', cost: 15, cd: 150, ai: { min: 120, max: 800 },
+      desc: 'Shatters a pane of itself and flings a fan of five glass shards.',
+      move: {
+        id: 'shards', kind: 'special', startup: 12, active: 1, recovery: 16, poses: ['castW', 'cast'],
+        onFrame(f, fr) {
+          if (fr !== 12) return;
+          Sound.play('glass');
+          for (let i = 0; i < 5; i++) spawnProj(f, {
+            x: f.x + f.facing * 26, y: f.y - 120, vx: f.facing * 14, vy: (i - 2) * 1.6, r: 10, life: 70, clash: 1, rot: i,
+            hits: { dmg: 14, kb: 2, stun: 14, fx: 'slash', color: '#9ad8e8', sfx: 'slash', hitstop: 2 },
+            tick(e) { e.rot += 0.4; if (e.y > FLOOR) e.kill('ground'); },
+            onEnd(e) { FX.spark(e.x, e.y, '#e8fcff', 5, 4); },
+            render(ctx, e) {
+              ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.rot);
+              ctx.fillStyle = 'rgba(210,245,255,0.9)'; ctx.strokeStyle = '#4a8a9a'; ctx.lineWidth = 1.5;
+              ctx.beginPath(); ctx.moveTo(-10, -4); ctx.lineTo(10, -2); ctx.lineTo(2, 6); ctx.closePath(); ctx.fill(); ctx.stroke();
+              ctx.restore();
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Mirror Step', icon: '映', color: '#c8e8f0', cost: 18, cd: 240, ai: { min: 200, max: 1280 },
+      desc: 'Steps into its own reflection and out of one behind the opponent, slashing as it emerges.',
+      move: {
+        id: 'mirrorstep', kind: 'special', startup: 16, active: 6, recovery: 14, poses: ['block', 'slash'],
+        hitbox: { x: 0, y: -140, w: 80, h: 110 }, hit: { dmg: 40, kb: 7, kby: -4, stun: 24, fx: 'slash', color: '#9ad8e8', sfx: 'glass' },
+        onFrame(f, fr, t) {
+          if (fr !== 14) return;
+          FX.ring(f.x, f.midY, '#c8e8f0', 60, 12, 3); FX.spark(f.x, f.midY, '#e8fcff', 10, 6);
+          if (t && t.state !== 'ko') { f.x = U.clamp(t.x - t.facing * 70, World.left + 30, World.right - 30); f.y = t.onGround ? t.y : World.groundAt(f.x, t.y); f.facing = t.x >= f.x ? 1 : -1; }
+          FX.ring(f.x, f.midY, '#c8e8f0', 60, 12, 3); Sound.play('glass');
+        },
+      },
+    },
+    {
+      name: 'Reflection', icon: '反', color: '#e8fcff', cost: 25, cd: 360, ai: { min: 0, max: 220 },
+      desc: 'Becomes a perfect mirror for a moment. A hit during it is reflected: the attacker eats their own blow, doubled, and the glass shatters outward.',
+      move: {
+        id: 'reflection', kind: 'special', startup: 26, active: 0, recovery: 14, counter: 24, poses: ['block', 'block'],
+        onStart(f) { FX.ring(f.x, f.midY, '#e8fcff', 50, 26, 3); },
+        onCounter(f, att, h) {
+          FX.text(f.x, f.y - 200, 'REFLECTED', '#e8fcff', 28, 55); Sound.play('glass'); FX.flash('#e8fcff', 0.3); FX.shake(8);
+          f.invuln = Math.max(f.invuln, 18); f.endMove();
+          f.facing = att.x >= f.x ? 1 : -1;
+          const dmg = Math.min(140, Math.max(40, (h.dmg || 30) * 2));
+          Combat.hit(f, att, { dmg, kb: 10, kby: -8, launch: true, unblockable: true, sureHit: true, hitstop: 10, color: '#9ad8e8', fx: 'slash', x: att.x, y: att.midY, dir: f.facing });
+        },
+      },
+    },
+    {
+      name: 'Hall of Mirrors', icon: '鏡', color: '#9ad8e8', cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 1280 },
+      desc: 'ULTIMATE. Mirrors rise all around the opponent and each one flashes out a glass blade in turn, then they all shatter at once.',
+      move: {
+        id: 'hallmirrors', kind: 'ult', startup: 30, active: 0, recovery: 20, poses: ['sign', 'sign'],
+        onStart(f) { f.invuln = 50; FX.banner('ULTIMATE', 'HALL OF MIRRORS', '#9ad8e8', 90); Sound.play('charge'); },
+        onFrame(f, fr, t) {
+          if (fr !== 28 || !t) return;
+          spawnSummon(f, {
+            x: t.x, y: FLOOR, life: 150, tgt: t,
+            tick(e) {
+              const v = e.tgt;
+              if (e.age % 18 === 10 && e.age < 120 && v.state !== 'ko') {
+                const k = Math.floor(e.age / 18), side = k % 2 ? 1 : -1;
+                FX.slash(v.x, v.midY, side * 0.4, 120, '#e8fcff', 4, 10); Sound.play('slash');
+                Combat.hit(f, v, { dmg: 22, kb: 1, stun: 18, noScale: true, hitstop: 3, fx: 'slash', color: '#9ad8e8', x: v.x, y: v.midY, dir: side });
+              }
+              if (e.age === 130 && v.state !== 'ko') {
+                FX.flash('#e8fcff', 0.6); FX.shake(16); Sound.play('glass'); Sound.play('boom');
+                for (let i = 0; i < 24; i++) FX.add({ type: 'glow', x: v.x + U.rand(-120, 120), y: v.midY + U.rand(-100, 60), vx: U.rand(-8, 8), vy: U.rand(-10, 2), life: 40, size: U.rand(3, 6), color: '#e8fcff', grav: 0.3, drag: 0.97 });
+                Combat.hit(f, v, { dmg: 90, kb: 12, kby: -12, launch: true, unblockable: true, noScale: true, hitstop: 12, color: '#9ad8e8', x: v.x, y: v.midY, dir: dirTo(f, v) });
+              }
+            },
+            render(ctx, e) {
+              const v = e.tgt, a = Math.min(1, e.age / 15) * (e.age > 130 ? 0 : 1);
+              if (!a) return;
+              ctx.save(); ctx.globalAlpha = a;
+              for (let i = 0; i < 6; i++) {
+                const ang = i / 6 * 6.283 + e.age * 0.01, mx = v.x + Math.cos(ang) * 150, sc = 0.6 + 0.4 * (Math.sin(ang) + 1) / 2;
+                ctx.save(); ctx.translate(mx, FLOOR); ctx.scale(Math.abs(Math.cos(ang)) * 0.6 + 0.4, sc);
+                ctx.fillStyle = '#5a7a8a'; ctx.fillRect(-34, -220, 68, 220);
+                ctx.fillStyle = 'rgba(200,240,255,0.55)'; ctx.fillRect(-28, -214, 56, 208);
+                ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(-20, -200, 8, 180);
+                ctx.restore();
+              }
+              ctx.restore();
+            },
+          });
+        },
+      },
+    },
+  ],
+};
+
+const DOLL = {
+  id: 'doll', name: 'Stitched Doll', short: 'DOLL', title: 'Curse of the Forgotten Toy', kanji: '人形霊', color: '#e88aa8', curse: true,
+  style: 'A puppeteer. Binds you with thread, peppers you with needles and sends tiny dolls to swarm you.',
+  bio: 'A porcelain doll left in an attic for a hundred years. Every child who ever cried over a lost toy made it a little stronger.',
+  passive: { name: 'Stuffing', desc: 'Light and floppy: takes 30% less knockback.' },
+  hp: 760, speed: 0.95, scale: 0.9, melee: { power: 0.85 },
+  look: { skin: '#f4e4dc', top: '#8a2a4a', pants: '#8a2a4a', accent: '#e88aa8', shoe: '#2a1018' }, aiStyle: { pref: 220, ranged: true },
+  onIncoming: (f, dmg) => ({ dmg, kb: 0.7 }),
+  drawHead(g) {
+    const { ctx, sk, col, OL, o } = g, [hx, hy] = sk.head;
+    // ringlet hair, porcelain face with a stitched smile and one button eye
+    ctx.fillStyle = col('#c8902a'); ctx.strokeStyle = OL; ctx.lineWidth = 2;
+    for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(hx - 12 + i * 2, hy - 6 + i * 6, 6, 0, 6.283); ctx.fill(); ctx.stroke(); }
+    headCircle(g, hx, hy, 16, '#f4e4dc');
+    ctx.fillStyle = col('#c8902a'); ctx.beginPath(); ctx.arc(hx - 2, hy - 10, 14, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = col('#8a2a4a'); ctx.beginPath(); ctx.moveTo(hx - 14, hy - 16); ctx.lineTo(hx - 2, hy - 30); ctx.lineTo(hx + 10, hy - 18); ctx.closePath(); ctx.fill(); ctx.stroke();
+    if (o.white || o.tint) return;
+    ctx.fillStyle = '#1a1018'; ctx.beginPath(); ctx.arc(hx + 7, hy - 2, 3.2, 0, 6.283); ctx.fill();
+    ctx.fillStyle = '#4a2a1a'; ctx.beginPath(); ctx.arc(hx - 1, hy - 1, 3.4, 0, 6.283); ctx.fill(); ctx.fillStyle = '#f4e4dc'; ctx.fillRect(hx - 2.5, hy - 2, 1, 1); ctx.fillRect(hx + 0.5, hy - 2, 1, 1);
+    ctx.strokeStyle = '#8a1a2a'; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(hx - 2, hy + 7); ctx.quadraticCurveTo(hx + 5, hy + 11, hx + 12, hy + 5); ctx.stroke();
+    for (let i = 0; i < 4; i++) { const x = hx + i * 3.5; ctx.beginPath(); ctx.moveTo(x, hy + 6.5 + i * 0.6); ctx.lineTo(x, hy + 10.5 + i * 0.4); ctx.stroke(); }
+    ctx.fillStyle = 'rgba(255,120,150,0.4)'; ctx.beginPath(); ctx.arc(hx + 10, hy + 2, 3, 0, 6.283); ctx.fill();
+  },
+  abilities: [
+    {
+      name: 'Needle Toss', icon: '針', color: '#d8d8e0', cost: 12, cd: 120, ai: { min: 140, max: 750 },
+      desc: 'Flicks three sewing needles in a tight line. Small, fast and hard to see.',
+      move: {
+        id: 'needles', kind: 'special', startup: 9, active: 1, recovery: 12, poses: ['jabW', 'point'],
+        onFrame(f, fr) {
+          if (fr !== 9) return;
+          Sound.play('whoosh');
+          for (let i = 0; i < 3; i++) spawnProj(f, {
+            x: f.x + f.facing * (20 - i * 16), y: f.y - 118 + (i - 1) * 6, vx: f.facing * 19, r: 7, life: 60,
+            hits: { dmg: 13, kb: 1, stun: 12, color: '#d8d8e0', fx: 'slash', hitstop: 1 },
+            render(ctx, e) { ctx.save(); ctx.strokeStyle = '#e8e8f0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(e.x - Math.sign(e.vx) * 18, e.y); ctx.lineTo(e.x, e.y); ctx.stroke(); ctx.strokeStyle = '#e88aa8'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(e.x - Math.sign(e.vx) * 18, e.y); ctx.lineTo(e.x - Math.sign(e.vx) * 34, e.y + 3); ctx.stroke(); ctx.restore(); },
+          });
+        },
+      },
+    },
+    {
+      name: 'Puppet Thread', icon: '糸', color: '#e88aa8', cost: 22, cd: 320, ai: { min: 100, max: 700 },
+      desc: 'Casts a pink thread. Whoever it snags is tied up in place, then yanked toward the doll.',
+      move: {
+        id: 'thread', kind: 'special', startup: 12, active: 1, recovery: 18, poses: ['castW', 'point'],
+        onFrame(f, fr) {
+          if (fr !== 12) return;
+          Sound.play('grab');
+          const x0 = f.x + f.facing * 24;
+          spawnProj(f, {
+            x: x0, y: f.y - 115, vx: f.facing * 16, r: 14, life: 42, x0, clash: 1,
+            hits: { dmg: 20, stunAdd: 45, kb: 0, color: '#e88aa8', sfx: 'grab', hitstop: 4 },
+            onHit(e, t) { t.vx = -f.facing * 9; FX.text(t.x, t.y - 170, 'TIED UP', '#e88aa8', 18, 40); },
+            render(ctx, e) {
+              ctx.save(); ctx.strokeStyle = '#e88aa8'; ctx.lineWidth = 2;
+              ctx.beginPath(); ctx.moveTo(e.x0, e.y); for (let x = e.x0; Math.abs(x - e.x) > 8; x += Math.sign(e.x - e.x0) * 12) ctx.lineTo(x, e.y + Math.sin(x * 0.2) * 3); ctx.lineTo(e.x, e.y); ctx.stroke();
+              ctx.fillStyle = '#e88aa8'; ctx.beginPath(); ctx.arc(e.x, e.y, 6, 0, 6.283); ctx.fill(); ctx.restore();
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Toy Box', icon: '玩', color: '#ffb0c8', cost: 30, cd: 420, ai: { min: 0, max: 900 },
+      desc: 'Lets loose four tiny wind-up dolls that toddle toward the opponent and nip at their ankles. They can be smashed.',
+      move: {
+        id: 'toybox', kind: 'special', startup: 14, active: 1, recovery: 18, poses: ['sign', 'cast'],
+        onFrame(f, fr) {
+          if (fr !== 14) return;
+          Sound.play('click'); FX.spark(f.x + f.facing * 30, f.y - 40, '#ffb0c8', 12, 5);
+          for (let i = 0; i < 4; i++) spawnSummon(f, {
+            x: f.x + f.facing * (24 + i * 20), y: FLOOR, life: 300, delay: i * 8, speed: 2.4 + i * 0.4, dir: f.facing, bite: 0,
+            name: 'WIND-UP DOLL', hp: 30, maxHp: 30, hurtbox: e => ({ x: e.x - 12, y: e.y - 40, w: 24, h: 40 }),
+            tick(e, t) {
+              if (e.age < e.delay || !t || t.state === 'ko') return;
+              e.y = World.groundAt(e.x, e.y);
+              e.dir = t.x >= e.x ? 1 : -1;
+              if (Math.abs(t.x - e.x) > 22) e.x = U.clamp(e.x + e.dir * e.speed, World.left + 10, World.right - 10);
+              if (e.bite > 0) e.bite--;
+              else if (Math.abs(t.x - e.x) < 30 && Math.abs(t.y - e.y) < 60) {
+                e.bite = 40;
+                Combat.hit(f, t, { dmg: 9, kb: 1, stun: 10, noScale: true, hitstop: 1, sfx: 'bite', color: '#ffb0c8', x: e.x, y: t.y - 30, dir: e.dir });
+              }
+            },
+            onEnd(e) { FX.spark(e.x, e.y - 20, '#ffb0c8', 6, 4); },
+            render(ctx, e) {
+              if (e.age < e.delay) return;
+              const bob = Math.abs(Math.sin(e.age * 0.4)) * 4;
+              ctx.save(); ctx.translate(e.x, e.y - bob); ctx.scale(e.dir, 1);
+              ctx.strokeStyle = '#2a1018'; ctx.lineWidth = 2;
+              ctx.fillStyle = '#8a2a4a'; ctx.beginPath(); ctx.moveTo(-10, -4); ctx.lineTo(10, -4); ctx.lineTo(6, -24); ctx.lineTo(-6, -24); ctx.closePath(); ctx.fill(); ctx.stroke();
+              ctx.fillStyle = '#f4e4dc'; ctx.beginPath(); ctx.arc(0, -32, 9, 0, 6.283); ctx.fill(); ctx.stroke();
+              ctx.fillStyle = '#c8902a'; ctx.beginPath(); ctx.arc(-1, -36, 8, Math.PI, 0); ctx.fill();
+              ctx.fillStyle = '#1a1018'; ctx.fillRect(3, -33, 2, 2);
+              ctx.strokeStyle = '#c8c8d0'; ctx.beginPath(); ctx.moveTo(-10, -16); ctx.lineTo(-16, -16); ctx.moveTo(-16, -20 + Math.sin(e.age * 0.3) * 3); ctx.lineTo(-16, -12 - Math.sin(e.age * 0.3) * 3); ctx.stroke();
+              ctx.restore();
+            },
+          });
+        },
+      },
+    },
+    {
+      name: 'Marionette', icon: '操', color: '#e88aa8', cost: 100, cd: 1500, ult: true, ai: { min: 0, max: 1280 },
+      desc: 'ULTIMATE. Threads drop from the dark and take hold of the opponent: they dance helplessly for three seconds while the doll stabs at them with a giant needle, then the strings snap.',
+      move: {
+        id: 'marionette', kind: 'ult', startup: 30, active: 0, recovery: 20, poses: ['sign', 'castW'],
+        onStart(f) { f.invuln = 50; FX.banner('ULTIMATE', 'MARIONETTE', '#e88aa8', 90); Sound.play('charge'); },
+        onFrame(f, fr, t) {
+          if (fr !== 28 || !t || t.state === 'ko') return;
+          t.applyStun(190, false, true);
+          spawnSummon(f, {
+            x: t.x, y: 0, life: 190, tgt: t, layer: 'front',
+            tick(e) {
+              const v = e.tgt; if (v.state === 'ko') { e.kill('ko'); return; }
+              v.vx = Math.sin(e.age * 0.15) * 3;
+              if (e.age % 30 === 20 && e.age < 170) { Sound.play('slash'); Combat.hit(f, v, { dmg: 24, stunAdd: 1, noScale: true, hitstop: 3, fx: 'slash', color: '#e88aa8', x: v.x, y: v.midY, dir: dirTo(f, v) }); }
+              if (e.age === 180) { Sound.play('grab'); FX.text(v.x, v.y - 190, 'SNAP', '#e88aa8', 26, 45); Combat.hit(f, v, { dmg: 60, kb: 10, kby: -12, launch: true, unblockable: true, noScale: true, hitstop: 10, color: '#e88aa8', x: v.x, y: v.midY, dir: dirTo(f, v) }); }
+            },
+            render(ctx, e) {
+              const v = e.tgt; if (e.age > 180) return;
+              const h = headPos(v);
+              ctx.save(); ctx.strokeStyle = 'rgba(232,138,168,0.85)'; ctx.lineWidth = 1.5;
+              for (const [dx, dy] of [[-30, -60], [30, -60], [-14, -150], [14, -150], [0, -170]]) { ctx.beginPath(); ctx.moveTo(v.x + dx * 1.6, -40); ctx.lineTo(v.x + dx, v.y + dy * v.scale); ctx.stroke(); }
+              ctx.fillStyle = '#5a4a3a'; ctx.fillRect(v.x - 70, -40, 140, 10);
+              ctx.restore();
+            },
+          });
+        },
+      },
+    },
+  ],
+};
+
+const CHARS = { gojo: GOJO, sukuna: SUKUNA, yuji: YUJI, yuta: YUTA, megumi: MEGUMI, g4: CURSE_G4, g3: CURSE_G3, finger: FINGER_BEARER, hanami: HANAMI, jogo: JOGO, mahito: MAHITO, choso: CHOSO, jin: JIN, ayane: AYANE, bao: BAO, daigo: DAIGO, wraith: WRAITH, lantern: LANTERN, crow: CROW, communism: COMMUNISM, capitalism: CAPITALISM, juan: JUAN, montag: MONTAG, mhound: MHOUND, hound: HOUND, mirror: MIRROR, doll: DOLL };
+
+// Technique order (left to right on the HUD and keys U I O L H G Y T R): regular techniques from
+// cheapest to most expensive, then ultimates with the domain expansion rightmost, then each
+// fighter's signature special moves (the ones that can't be copied: RCT, Copy, Takeover, Reload).
+function orderAbilities(def) {
+  if (!def.abilities) return;
+  const old = def.abilities.filter(Boolean);
+  const special = a => a.copy || a.noCopy;
+  const rank = a => (special(a) ? 3 : a.ult ? (/^DOMAIN EXPANSION/.test(a.desc) ? 2 : 1) : 0);
+  const sorted = old.map((a, i) => ({ a, i })).sort((p, q) => rank(p.a) - rank(q.a) || (rank(p.a) ? 0 : p.a.cost - q.a.cost) || p.i - q.i).map(o => o.a);
+  if (def.initCd) {
+    const m = {};
+    for (const i in def.initCd) { const a = def.abilities[i]; if (a) m[sorted.indexOf(a)] = def.initCd[i]; }
+    def.initCd = m;
+  }
+  def.abilities = sorted;
+}
+for (const id in CHARS) orderAbilities(CHARS[id]);
+
+const ROSTER = ['yuji', 'gojo', 'sukuna', 'yuta', 'megumi', 'mahito', 'jogo', 'choso', 'jin', 'ayane', 'bao', 'daigo', 'communism', 'capitalism', 'juan', 'montag', 'hanami', 'finger', 'g3', 'g4', 'wraith', 'lantern', 'crow', 'hound', 'mirror', 'doll', 'mhound'];
 const CURSE_IDS = [];
 
 /* ---------------------------------------------------------------- Story Mode */
@@ -4802,7 +5660,7 @@ const STORY = [
     blurb: 'A boy with a monstrous body swallows a cursed finger — and wakes the King of Curses.',
     fights: [
       { enemy: 'g4', diff: 0.12, arena: 'school', text: 'Night at the old school building. Something crawls out of the dark, drawn by the cursed finger in your pocket. You have no technique — just your fists.' },
-      { enemy: 'g3', diff: 0.28, arena: 'school', text: 'The finger\'s presence draws stronger curses. A many-eyed spirit blocks the stairwell. Keep your guard up and close the distance.' },
+      { enemies: ['g3', 'g4', 'g4'], diff: 0.24, arena: 'school', text: 'The finger\'s presence draws a whole nest of curses. A many-eyed spirit blocks the stairwell and two lesser ones crawl out behind it. Don\'t get surrounded — keep them all on one side of you.' },
       { enemy: 'finger', diff: 0.42, arena: 'womb', text: 'The Detention Center. A curse that devoured one of Sukuna\'s fingers has grown into a special grade. Its shockwaves cover the floor — jump them.' },
       { enemy: 'sukuna', diff: 0.58, arena: 'womb', boss: true, text: 'Your heart stops. Within your own soul, the King of Curses sits on his throne of bones. Beat him, and the body stays yours.' },
     ],
@@ -4831,7 +5689,7 @@ const STORY = [
     id: 'yuta', title: 'The Special Grade', hero: 'yuta', kanji: '特級',
     blurb: 'Yuta returns to Japan with Rika — and the curses come running.',
     fights: [
-      { enemy: 'g3', diff: 0.35, arena: 'school', text: 'Your first mission back. A nest of curses at the old campus. Use your katana\'s reach.' },
+      { enemies: ['mirror', 'doll'], diff: 0.38, hpMul: 0.75, arena: 'manor', text: 'Your first mission back: a haunted manor. A Mirror Curse and a Stitched Doll have made it their home. Don\'t swing blindly at the mirror — it reflects — and smash the doll\'s toys before they swarm you.' },
       { enemy: 'finger', diff: 0.45, arena: 'womb', text: 'A finger bearer has taken the detention center. Rika is restless.' },
       { enemy: 'mahito', diff: 0.6, arena: 'shibuya', text: 'The patchwork curse wants to see what your soul looks like. Freeze him with Cursed Speech.' },
       { enemy: 'sukuna', diff: 0.8, arena: 'shinjuku', boss: true, text: 'The King of Curses. Every last drop of Rika\'s love goes into this fight.' },
@@ -4843,6 +5701,7 @@ const STORY = [
     fights: [
       { enemy: 'g4', diff: 0.3, arena: 'school', text: 'A routine exorcism. Let the Divine Dogs do the hunting.' },
       { enemy: 'g3', diff: 0.4, arena: 'womb', text: 'This one spits from range. Nue strikes from above — use it.' },
+      { enemies: ['hound', 'hound', 'hound'], diff: 0.4, hpMul: 0.8, arena: 'subway', text: 'A pack of Rot Hounds has taken the underground. Every hound left standing makes the others hit harder — thin the pack fast, and use the lockers if they corner you.' },
       { enemy: 'hanami', diff: 0.55, arena: 'school', text: 'The forest itself attacks. Snare it with the Toad and press in.' },
       { enemy: 'mahito', diff: 0.72, arena: 'shibuya', boss: true, text: 'Shibuya Station. Mahito blocks the way. Flood the arena with shadow and stop him here.' },
     ],
@@ -4953,6 +5812,16 @@ const STORY = [
       { enemy: 'crow', diff: 0.46, arena: 'school', text: 'A crow spirit keeps to the skies. Hop up after it, and when it hides behind its flock, let Powder Rain fall.' },
       { enemy: 'jin', diff: 0.62, arena: 'bamboo', text: 'A rival gun-for-hire with a greatsword. Count your shells, Reload when you\'re dry, and never take him on with an empty chamber.' },
       { enemy: 'capitalism', diff: 0.82, arena: 'train', boss: true, text: 'The Tycoon\'s gold is on the Desert Express. Rob the train: out-shoot his AK-47, then open The Hot Desert and wait for High Noon.' },
+    ],
+  },
+  {
+    id: 'montag', title: 'Four Hundred Fifty-One', hero: 'montag', kanji: '焚書',
+    blurb: 'A fireman starts to wonder what is inside the books he burns — and the firehouse sets its Hound on him.',
+    fights: [
+      { enemy: 'doll', diff: 0.35, arena: 'manor', text: 'The alarm sounds: a whole manor full of forbidden books. Something stitched together guards the attic. Hose down the floor first, then strike the match.' },
+      { enemies: ['hound', 'hound'], diff: 0.42, hpMul: 0.85, arena: 'subway', text: 'You kept one of the books. Now you are the one running. Rot Hounds stalk the underground — soak the pack together and burn a path to the last train.' },
+      { enemy: 'capitalism', diff: 0.56, arena: 'mall', text: 'The city wants its sales and its parlor screens, not questions. The Tycoon owns this mall and wants you gone. Keep him soaked so every spark counts.' },
+      { enemy: 'mhound', diff: 0.74, arena: 'docks', boss: true, text: 'The Mechanical Hound has your scent, and no hiding spot will fool it. Make your stand on the waterfront: kerosene on the pier, then the Salamander.' },
     ],
   },
 ];

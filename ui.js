@@ -43,7 +43,8 @@ function drawPortrait(ctx, def, cx, cy, r, facing = 1) {
   ctx.fillStyle = g; ctx.fill(); ctx.clip();
   const pose = POSES.idle, sk = skeleton(pose), drop = poseDrop(pose, sk), s = def.scale || 1;
   const k = r / 26 / s;
-  drawStickman(ctx, def, pose, cx - sk.head[0] * k * s * facing, cy + r * 0.12 - (sk.head[1] - drop) * k * s, facing, { k });
+  const hd = def.portraitHead || sk.head;   // non-humanoid bodies say where their head is
+  drawStickman(ctx, def, pose, cx - hd[0] * k * s * facing, cy + r * 0.12 - (hd[1] - drop) * k * s, facing, { k });
   ctx.restore();
   ctx.save(); ctx.strokeStyle = def.color; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.283); ctx.stroke(); ctx.restore();
@@ -109,6 +110,7 @@ const UI = {
     this.navIdx = (i + this.nav.length) % this.nav.length;
     this.nav.forEach((b, j) => b.classList.toggle('focus', j === this.navIdx));
     const b = this.nav[this.navIdx];
+    if (b.scrollIntoView) b.scrollIntoView({ block: 'nearest' });   // keep the focused item on screen in scrolling lists
     if (!silent) Sound.play('select');
     if (b.onfocusnav) b.onfocusnav();
   },
@@ -152,7 +154,7 @@ const UI = {
           <button class="nav" data-act="controls"><b>Controls</b><small>Key bindings &amp; tips</small></button>
           <button class="nav" data-act="settings"><b>Settings</b><small>Audio, effects &amp; round rules</small></button>
         </nav>
-        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back · <span class="build">build 26 · ${ROSTER.length} fighters</span></div>
+        <div class="menu-foot">W/S or ↑/↓ to move · Enter or J to select · Esc to go back · <span class="build">build 30 · ${ROSTER.length} fighters</span></div>
       </div>`;
     s.querySelectorAll('[data-act]').forEach(b => { b.onclick = () => this.menuAct(b.dataset.act); });
   },
@@ -255,7 +257,7 @@ const UI = {
   },
 
   showBrief(chIdx, idx) {
-    const ch = STORY[chIdx], ft = ch.fights[idx], hero = CHARS[ch.hero], foe = CHARS[ft.enemy];
+    const ch = STORY[chIdx], ft = ch.fights[idx], hero = CHARS[ch.hero], foe = CHARS[ft.enemy || ft.enemies[0]], pack = !!ft.enemies;
     const s = $('#scr-brief');
     s.innerHTML = `<div class="brief-wrap">
         <div class="brief-head"><span>CHAPTER ${chIdx + 1} · ${ch.title}</span><span>FIGHT ${idx + 1} / ${ch.fights.length}</span></div>
@@ -264,14 +266,15 @@ const UI = {
           <div class="brief-mid">
             <div class="vs">VS</div>
             ${ft.boss ? '<div class="boss-tag">BOSS BATTLE · BEST OF 3</div>' : ''}
-            <h3>${foe.name}</h3><div class="brief-title">${foe.title}</div>
+            ${pack ? `<div class="boss-tag">PACK FIGHT · ${ft.enemies.length} ENEMIES</div>` : ''}
+            <h3>${pack ? foeNames(ft) : foe.name}</h3><div class="brief-title">${pack ? 'Defeat them all' : foe.title}</div>
             <p>${ft.text}</p>
             <div class="brief-btns">
               <button class="nav btn-primary" data-a="fight">Fight!</button>
               <button class="nav" data-a="back">Back to chapters</button>
             </div>
           </div>
-          <div class="brief-side"><canvas class="bp2"></canvas><b style="color:${foe.color}">${foe.name}</b></div>
+          <div class="brief-side"><canvas class="bp2"></canvas><b style="color:${foe.color}">${pack ? foeNames(ft) : foe.name}</b></div>
         </div></div>`;
     const c1 = s.querySelector('.bp1'), c2 = s.querySelector('.bp2');
     prepCanvas(c1, 240, 320); prepCanvas(c2, 240, 320);
@@ -350,19 +353,15 @@ const UI = {
         ${row('Drop through platform', `${k('S')} + ${k('W')}`, `${k('↓')} + ${k('↑')}`)}
         ${row('Basic attack / M1 (3-hit chain)', `${k('J')} or Left Click`, `${k('Num1')} or ${k('.')}`)}
         ${row('Heavy attack', k('K'), `${k('Num2')} or ${k('/')}`)}
-        ${row('Special techniques 1-4', k('U I O L'), `${k('Num4 Num5 Num6 Num7')} or ${k('P [ ] \\')}`)}
-        ${row('5th technique (Yuji: Takeover · Yuta: Copy · Megumi: Mahoraga · Gojo: Blink Strike · Sukuna: World-Cutting Slash · Jogo: Coffin)', k('H'), `${k('Num8')} or ${k("'")}`)}
-        ${row('6th technique (Gojo: Blue Max · Sukuna: Spiderweb)', k('G'), `${k('Num9')} or ${k(';')}`)}
-        ${row('6th–8th techniques (Yuji: Piercing Blood · Supernova · Flowing Red Scale)', `${k('G')} ${k('Y')} ${k('T')}`, `${k('Num9')} ${k('Num3')} ${k('Num.')}`)}
-        ${row('7th technique (Gojo: Teleport · Sukuna: Dismantle Barrage)', k('Y'), `${k('Num3')} or ${k('-')}`)}
-        ${row('8th technique (Gojo & Sukuna: Reverse Cursed Technique)', k('T'), `${k('Num.')} or ${k('=')}`)}
+        ${row('Techniques 1-4', k('U I O L'), `${k('Num4 Num5 Num6 Num7')} or ${k('P [ ] \\')}`)}
+        ${row('Techniques 5-9', k('H G Y T R'), `${k('Num8 Num9 Num3 Num. Num+')} or ${k("' ; - = 0")}`)}
         ${row('Dash / dodge', k('Shift'), `${k('Num0')} or ${k('RShift')}`)}
         ${row('Pause', k('Esc'), k('P'))}
       </table>
       <ul class="tips">
         <li>Chain <kbd>J</kbd> <kbd>J</kbd> <kbd>J</kbd>, then cancel a landed hit into Heavy or any special technique for big combos.</li>
         <li>Dashing grants brief invulnerability — dash <i>through</i> projectiles. Gojo's dash is a teleport.</li>
-        <li>Technique 4 is the Ultimate / Domain Expansion and needs a full 100 cursed energy. Two domains at once start a Domain Clash: mash your clash key (Space; Enter for player 2) — whoever presses more in 5 seconds keeps their domain.</li>
+        <li>Techniques run left to right from cheapest to most expensive. The Ultimate / Domain Expansion sits to the right of them and needs a full 100 cursed energy; a fighter's signature move (Reverse Cursed Technique, Copy, Takeover, Reload) comes last. Two domains at once start a Domain Clash: mash your clash key (Space; Enter for player 2) — whoever presses more in 5 seconds keeps their domain.</li>
         <li>Yuji: press Black Flash again the instant his fist flashes red for a true Black Flash.</li>
         <li>In Story Mode and Versus CPU you can use either key set.</li>
       </ul>

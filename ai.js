@@ -21,6 +21,8 @@ class AIController {
     for (const k of AI_KEYS) { this.pressed[k] = false; this.held[k] = false; }
     const f = this.f, o = f && World.opp(f);
     if (!f) return;
+    // hold-to-use heavies (Montag's hose): keep the key down for a moment
+    if (this.holdHeavy > 0) { this.holdHeavy--; this.held.heavy = true; }
     const c = World.clash;
     if (c) {
       // domain clash mash-off: about 4 presses a second on easy up to 11 on the hardest setting
@@ -62,8 +64,8 @@ class AIController {
     }
 
     // ---- hide and seek: a hidden opponent can't be seen, only bumped into
-    // (on big maps the CPU only notices you within sight range)
-    const big = World.arena && World.arena.width, visible = !o.hidden && (!big || dist < 1000);
+    // (on big maps the CPU only notices you within sight range; a scent-tracker always knows)
+    const big = World.arena && World.arena.width, visible = f.def.seesHidden || (!o.hidden && (!big || dist < 1000));
     if (visible) { this.seen = { x: o.x, y: o.y }; this.searchT = 0; }
     else if (dist > 60) { this.search(f, o); return; }
 
@@ -124,6 +126,7 @@ class AIController {
         if (dist >= a.ai.min && dist <= a.ai.max && (!a.ai.when || a.ai.when(f, o))) choices.push(i);
       });
       if (choices.length && Math.random() < 0.16 + 0.28 * L) { this.press('s' + U.pick(choices)); return; }
+      if (f.def.aiHeavy && f.def.aiHeavy(f, o, dist) && Math.random() < 0.2 + 0.3 * L) { this.press('heavy'); this.holdHeavy = U.randInt(25, 70); return; }
       if (dist < reach && Math.abs(o.y - f.y) < 100) {
         if (o.state === 'block' && Math.random() < 0.3 * L) { this.retreatT = U.randInt(8, 18); return; }
         if (Math.random() < 0.3 + 0.55 * L) { this.press(Math.random() < 0.72 ? 'basic' : 'heavy'); return; }

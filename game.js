@@ -1287,6 +1287,7 @@ const Game = {
       f.team = r.team; f.tag = r.tag || (r.ai != null ? 'CPU' : 'P' + (i + 1));
       f.keyLabels = r.ai != null || (r.input && r.tag !== 'YOU') ? KEY_LABELS.cpu : r.keys === 'p2' ? KEY_LABELS.p2 : KEY_LABELS.p1;
       if (r.boss) f.maxHp = Math.round(f.maxHp * 1.1);
+      if (r.hpMul) f.maxHp = Math.round(f.maxHp * r.hpMul);
       return f;
     });
     this.placeFighters();
@@ -1435,12 +1436,26 @@ World.onKO = f => Game.onKO(f);
 
 /* ---------------------------------------------------------------- story */
 
+// A story fight is against one enemy, or a pack of them (ft.enemies), e.g. "Rot Hound ×2 & Grade 4 Curse".
+function foeNames(ft) {
+  const ids = ft.enemies || [ft.enemy], counts = new Map();
+  for (const id of ids) counts.set(id, (counts.get(id) || 0) + 1);
+  return [...counts].map(([id, n]) => CHARS[id].name + (n > 1 ? ` ×${n}` : '')).join(' & ');
+}
+
 const Story = {
   ch: 0, idx: 0,
   progress() { return Store.get('story', {}); },
   begin(ch) { this.ch = ch; this.idx = 0; UI.showBrief(ch, 0); },
   fight() {
     const c = STORY[this.ch], ft = c.fights[this.idx];
+    if (ft.enemies) {
+      // a pack fight: every spirit is on the same CPU team, each a little frailer than when fought alone
+      const roster = [{ id: c.hero, team: 0, ai: null, keys: 'solo', tag: 'P1' },
+        ...ft.enemies.map(id => ({ id, team: 1, ai: ft.diff, tag: 'CPU', hpMul: ft.hpMul ?? 0.7 }))];
+      Game.startMatch({ mode: 'story', roster, arena: ft.arena, wins: ft.boss ? 2 : 1 });
+      return;
+    }
     Game.startMatch({ mode: 'story', p1: c.hero, p2: ft.enemy, p2ai: ft.diff, solo: true, arena: ft.arena, wins: ft.boss ? 2 : 1, boss: ft.boss });
   },
   onResult(won) {
@@ -1448,7 +1463,7 @@ const Story = {
     Game.startDemo();
     if (!won) {
       UI.showResult({
-        title: 'DEFEAT', color: '#ff3355', sub: `${CHARS[ft.enemy].name} stands over you.`,
+        title: 'DEFEAT', color: '#ff3355', sub: `${foeNames(ft)} ${ft.enemies ? 'stand' : 'stands'} over you.`,
         buttons: [{ label: 'Retry', fn: () => this.fight() }, { label: 'Chapter Select', fn: () => UI.openStory(this.ch) }, { label: 'Main Menu', fn: () => UI.openMenu(0) }],
       });
       return;
@@ -1469,7 +1484,7 @@ const Story = {
     }
     const next = c.fights[this.idx];
     UI.showResult({
-      title: 'VICTORY', color: '#ffd34d', sub: `Next opponent: ${CHARS[next.enemy].name}${next.boss ? ' (BOSS)' : ''}`,
+      title: 'VICTORY', color: '#ffd34d', sub: `Next: ${foeNames(next)}${next.boss ? ' (BOSS)' : ''}`,
       buttons: [{ label: 'Continue', fn: () => UI.showBrief(this.ch, this.idx) }, { label: 'Chapter Select', fn: () => UI.openStory(this.ch) }],
     });
   },
