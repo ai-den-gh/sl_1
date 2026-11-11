@@ -32,12 +32,16 @@ const U = {
 
 /* ---------------------------------------------------------------- World */
 
+// The camera (render-side). On normal arenas it never moves; big arenas scroll and zoom.
+// x is the world x at the left edge of the screen, z the zoom, w the visible world width.
+const Cam = { x: 0, z: 1, w: W };
+
 const World = {
   fighters: [], entities: [], particles: [], timers: [],
   shake: 0, flash: 0, flashColor: '#fff',
   timeScale: 1, slowTimer: 0, hitstop: 0,
   domain: null, banner: null, frame: 0,
-  arena: null, platforms: [], left: 30, right: W - 30,
+  arena: null, platforms: [], hides: [], left: 30, right: W - 30,
   active: false,          // true while fighters accept input
   onKO: null,             // set by game.js
   settings: { shake: true, hitboxes: false, volume: 0.6, roundTime: 99, particles: 1, blood: true },
@@ -63,6 +67,12 @@ const World = {
   },
   later(t, fn) { this.timers.push({ t, fn }); },
   spawn(e) { this.entities.push(e); return e; },
+  // The hiding spot a fighter is tucked into, if any. Standing still-ish inside one hides you;
+  // attacking, getting hit or leaving the ground gives you away.
+  hideAt(f) {
+    if (!this.hides.length || !f.onGround || !['idle', 'walk', 'block'].includes(f.state)) return null;
+    return this.hides.find(h => f.x > h.x + 10 && f.x < h.x + h.w - 10 && Math.abs(f.y - h.y) < 3) || null;
+  },
   // highest walkable surface at or below y
   groundAt(x, y) {
     let g = FLOOR;
@@ -88,6 +98,7 @@ const World = {
     this.frame++;
     for (const f of this.fighters) if (f.input && f.input.update) f.input.update();
     for (const f of this.fighters) f.update();
+    for (const f of this.fighters) { const h = this.hideAt(f); f.hidden = !!h; f.hideSpot = h; }
     for (let i = 0; i < this.entities.length; i++) { const e = this.entities[i]; if (!e.dead) e.update(); }
     resolveClashes();
     this.entities = this.entities.filter(e => !e.dead);
@@ -565,7 +576,7 @@ class Fighter {
     if (this.def !== this.baseDef) this.setDef(this.baseDef);
     this.takeoverT = 0; this.usedTakeover = false; this.split = null;
     this.x = this.spawnX ?? (this.side === 0 ? 420 : W - 420); this.y = FLOOR; this.prevY = FLOOR;
-    this.vx = 0; this.vy = 0; this.facing = this.x < W / 2 ? 1 : -1; this.onGround = true;
+    this.vx = 0; this.vy = 0; this.facing = this.x < (World.left + World.right) / 2 ? 1 : -1; this.onGround = true; this.hidden = false; this.hideSpot = null;
     this.hp = this.maxHp; this.hpTrail = this.maxHp; this.ce = this.def.noCE ? 0 : 50; this.guard = 100; this.evidence = 0;
     this.state = 'idle'; this.stateT = 0; this.move = null; this.mf = 0; this.mvars = {};
     this.hitList = new Set(); this.moveHit = false;
@@ -1006,7 +1017,7 @@ class Entity {
     if (this.hits) this.collide();
     if (this.dead) return;
     if (this.wallKill && (this.x < World.left - 10 || this.x > World.right + 10)) this.kill('wall');
-    else if (this.x < -200 || this.x > W + 200) this.kill('wall');
+    else if (this.x < World.left - 230 || this.x > World.right + 230) this.kill('wall');
     if (this.age >= this.life) this.kill('expire');
   }
   collide() {
@@ -1128,11 +1139,13 @@ const Clash = {
   start(curDom, owner, spec) {
     // each caster takes the half of the screen they were on and stands in the middle of it, facing the other
     const aLeft = curDom.owner.x <= owner.x;
+    // on big maps the clash happens around the pair, and the camera centres on it
+    const mid = U.clamp((curDom.owner.x + owner.x) / 2, World.left - 30 + W / 2, World.right + 30 - W / 2);
     for (const [f, left] of [[curDom.owner, aLeft], [owner, !aLeft]]) {
-      f.x = left ? W / 4 : W * 3 / 4; f.vx = 0; f.facing = left ? 1 : -1;
+      f.x = mid + (left ? -W / 4 : W / 4); f.vx = 0; f.facing = left ? 1 : -1;
       FX.smoke(f.x, f.y - 40, '#ffffff', 6, 20, 16);
     }
-    World.clash = { a: curDom.owner, b: owner, domA: curDom, specB: spec, t: 0, max: 300, score: [0, 0], pop: [0, 0], aLeft,
+    World.clash = { mid, a: curDom.owner, b: owner, domA: curDom, specB: spec, t: 0, max: 300, score: [0, 0], pop: [0, 0], aLeft,
       // display-only copies of both domains for the split-screen backdrop (the real ones stay untouched)
       views: [Object.assign(Object.create(curDom), { age: curDom.age, life: Infinity }), Object.assign({ owner, age: 0 }, spec, { life: Infinity })] };
     FX.flash('#ffffff', 0.8); FX.shake(16); Sound.play('clash');

@@ -37,12 +37,46 @@ class AIController {
     const pref = style.ranged ? style.pref : Math.min(style.pref || 80, reach - 8);
 
     if (f.state === 'move') { this.comboLogic(f, o, L, dist); return; }
-    if (!f.isFree()) return;
+    if (!f.isFree()) {
+      // being comboed: remember it, so we try to break out the moment we can act again
+      if (f.state === 'hit' || f.state === 'stun' || f.state === 'launch') { this.wasHit = true; this.threatT = 0; this.blockT = 0; this.escapeT = Math.round(U.rand(0, 4) * (1.3 - L)); }
+      return;
+    }
+
+    // ---- combo escape: right after hitstun, block, dodge out or swing back instead of eating the next hit
+    if (this.wasHit) {
+      if (this.escapeT-- > 0) return;
+      this.wasHit = false;
+      if (dist < 280 && Math.random() < 0.5 + 0.45 * L) {
+        const r = Math.random();
+        if (r < 0.4) { this.blockT = U.randInt(18, 30); h.down = true; return; }
+        if (r < 0.75) {
+          h[away] = true;
+          if (f.dashCd <= 0) this.press('dash'); else this.press('up');
+          this.retreatT = U.randInt(10, 24);
+          return;
+        }
+        if (r < 0.88 && f.onGround) { h[away] = true; this.press('up'); return; }
+        this.press(Math.random() < 0.7 ? 'basic' : 'heavy'); return;
+      }
+    }
+
+    // ---- hide and seek: a hidden opponent can't be seen, only bumped into
+    // (on big maps the CPU only notices you within sight range)
+    const big = World.arena && World.arena.width, visible = !o.hidden && (!big || dist < 1000);
+    if (visible) { this.seen = { x: o.x, y: o.y }; this.searchT = 0; }
+    else if (dist > 60) { this.search(f, o); return; }
+
+    // ---- multi-floor maps: climb up to, or drop down to, the opponent's floor
+    if (World.arena && World.arena.width && Math.abs(o.y - f.y) > 100 && dist < 420 && this.changeFloor(f, o.y, o.x)) return;
 
     // ---- defence: react to incoming attacks after a human-like delay
     const threat = this.detectThreat(f, o, dist);
     this.threatT = threat ? this.threatT + 1 : 0;
-    if (threat && this.threatT === Math.round(16 - 12 * L)) {
+    // react once the human-like delay has passed; a sustained threat (a long string of attacks)
+    // is reacted to again after a short cooldown instead of being ignored
+    if (threat && this.threatT >= Math.round(16 - 12 * L)) {
+      this.threatT = -Math.round(U.rand(6, 14) * (1.2 - L));
       const r = Math.random();
       if (threat.big && r < 0.25 + 0.6 * L) {
         h[Math.random() < 0.5 ? toward : away] = true;
@@ -109,6 +143,49 @@ class AIController {
     else if (style.ranged && dist < pref * 0.5) h[away] = true;
     if (o.y < f.y - 80 && dist < 240 && f.onGround && Math.random() < 0.08) this.press('up');
     if (dist > 480 && f.dashCd <= 0 && !style.ranged && Math.random() < 0.025 * L) { h[toward] = true; this.press('dash'); }
+  }
+
+  // Walks to where the opponent was last seen, then pokes around nearby rooms.
+  search(f, o) {
+    const h = this.held;
+    f.faceTarget = null;
+    if (!this.seen) this.seen = { x: U.rand(World.left + 100, World.right - 100), y: FLOOR };
+    const dx = this.seen.x - f.x;
+    if (Math.abs(this.seen.y - f.y) > 100 && Math.abs(dx) < 420 && this.changeFloor(f, this.seen.y, this.seen.x)) return;
+    if (Math.abs(dx) > 30) { h[dx > 0 ? 'right' : 'left'] = true; return; }
+    // reached the spot: look around for a moment, then try somewhere else close by
+    if (++this.searchT < 50) { if (this.searchT % 25 === 0) f.facing = -f.facing; return; }
+    this.searchT = 0;
+    const floors = [FLOOR, ...World.platforms.filter(p => p.w > 300).map(p => p.y)];
+    // an opponent out in the open makes noise: usually head roughly their way. A hidden one gives nothing away.
+    if (!o.hidden && Math.random() < 0.6) this.seen = { x: U.clamp(o.x + U.rand(-300, 300), World.left + 60, World.right - 60), y: o.y };
+    else this.seen = { x: U.clamp(f.x + U.rand(-700, 700), World.left + 60, World.right - 60), y: U.pick(floors) };
+  }
+
+  // Jumps toward a higher floor or drops through the current one. Returns true while busy.
+  changeFloor(f, ty, tx) {
+    const h = this.held;
+    if (ty < f.y - 100) {
+      // find the closest platform above us we can jump up onto, near the target
+      const above = World.platforms.filter(p => p.y < f.y - 20 && p.y >= ty - 10 && f.y - p.y < 300);
+      if (!above.length) return false;
+      above.sort((a, b) => Math.abs(a.x + a.w / 2 - tx) - Math.abs(b.x + b.w / 2 - tx));
+      const p = above[0], inside = f.x > p.x + 20 && f.x < p.x + p.w - 20;
+      if (!inside) {
+        const edge = f.x < p.x ? p.x + 40 : p.x + p.w - 40;
+        h[edge > f.x ? 'right' : 'left'] = true;
+        if (Math.abs(edge - f.x) < 120 && f.onGround) this.press('up');
+        return true;
+      }
+      if (f.onGround) this.press('up');
+      else if (f.jumps < 2 && f.vy > -3) this.press('up');
+      return true;
+    }
+    if (ty > f.y + 100 && f.onGround && f.y < FLOOR - 1) {
+      h.down = true; this.press('up');
+      return true;
+    }
+    return false;
   }
 
   // Picks an enemy summon worth attacking (close, reachable, with health), or null.

@@ -503,7 +503,7 @@ function piercingBloodMove(o) {
       if (o.big) FX.flash(BLOOD, 0.35);
       const y = hp.y, w = o.width || 22;
       spawnSummon(f, { life: o.big ? 30 : 14, x0: hp.x, y, dir: f.facing, w, render(ctx, e) {
-        const k = 1 - e.age / e.life, x1 = e.dir > 0 ? W + 40 : -40;
+        const k = 1 - e.age / e.life, x1 = e.dir > 0 ? World.right + 70 : World.left - 70;
         ctx.save(); ctx.globalCompositeOperation = 'lighter';
         ctx.fillStyle = `rgba(196,18,47,${0.8 * k})`; ctx.fillRect(Math.min(e.x0, x1), e.y - e.w * k, Math.abs(x1 - e.x0), e.w * 2 * k);
         ctx.fillStyle = `rgba(255,220,220,${k})`; ctx.fillRect(Math.min(e.x0, x1), e.y - e.w * 0.3 * k, Math.abs(x1 - e.x0), e.w * 0.6 * k);
@@ -732,7 +732,7 @@ const GOJO = {
               FX.text(t.x, t.y - 185, 'OVERLOADED', '#bfefff', 26, 80);
             },
             tick(d, t) {
-              if (d.age % 3 === 0) FX.add({ type: 'spark', x: U.rand(0, W), y: U.rand(0, FLOOR), vx: 0, vy: 0, life: 20, size: 2, color: '#e0f6ff' });
+              if (d.age % 3 === 0) FX.add({ type: 'spark', x: U.rand(Cam.x, Cam.x + Cam.w), y: U.rand(0, FLOOR), vx: 0, vy: 0, life: 20, size: 2, color: '#e0f6ff' });
               if (d.age !== 200 || !t || t.state === 'ko') return;
               t.stun = 0; t.frozen = false; t.setState('idle');
               FX.explosion(t.x, t.midY, 140, ['#ffffff', '#b8f0ff', '#6fd3ff']); FX.flash('#fff', 0.9); FX.shake(18);
@@ -967,7 +967,7 @@ const SUKUNA = {
           Domains.start(f, {
             type: 'shrine', life: 280, bg: drawShrineBg,
             tick(d, t) {
-              if (d.age % 4 === 0) FX.slash(U.rand(0, W), U.rand(120, FLOOR), U.rand(-1.4, 1.4), U.rand(60, 140), U.pick(['#ffffff', '#ff4d6a']), 3, 10);
+              if (d.age % 4 === 0) FX.slash(U.rand(Cam.x, Cam.x + Cam.w), U.rand(120, FLOOR), U.rand(-1.4, 1.4), U.rand(60, 140), U.pick(['#ffffff', '#ff4d6a']), 3, 10);
               if (d.age < 20 || d.age % 9 !== 0 || !t || t.state === 'ko') return;
               if (Math.abs(t.x - f.x) > 760) return;
               Combat.hit(f, t, { dmg: 20, kb: 1.5, stun: 12, hitstop: 1, type: 'domain', chip: 0.6, noScale: true, guardDmg: 3, fx: 'slash', sfx: 'slash', x: t.x + U.rand(-15, 15), y: t.midY + U.rand(-40, 40), dir: dirTo(f, t) });
@@ -989,7 +989,7 @@ const SUKUNA = {
           if (fr !== 26) return;
           Sound.play('slash'); Sound.play('boom'); FX.shake(18); FX.flash('#ffffff', 0.45);
           spawnSummon(f, { life: 22, y, dir: f.facing, x0: f.x, render(ctx, e) {
-            const k = 1 - e.age / e.life, x1 = e.dir > 0 ? W + 40 : -40;
+            const k = 1 - e.age / e.life, x1 = e.dir > 0 ? World.right + 70 : World.left - 70;
             ctx.save(); ctx.globalCompositeOperation = 'lighter';
             ctx.strokeStyle = `rgba(255,255,255,${k})`; ctx.lineWidth = 2 + 10 * k;
             ctx.beginPath(); ctx.moveTo(e.x0, e.y); ctx.lineTo(x1, e.y); ctx.stroke();
@@ -1417,7 +1417,7 @@ const YUTA = {
               drawRika(ctx, e.x, e.y, 1.25, e.facing, e.age, e.swipe || e.beam ? 1 : 0.3);
               ctx.restore();
               if (e.beam >= 20 && e.beam < 48) {
-                const by = e.y + 30, x0 = e.x + e.beamDir * 40, x1 = e.beamDir > 0 ? W + 40 : -40;
+                const by = e.y + 30, x0 = e.x + e.beamDir * 40, x1 = e.beamDir > 0 ? World.right + 70 : World.left - 70;
                 const k = e.beam < 25 ? (e.beam - 20) / 5 : 1 - (e.beam - 25) / 23;
                 ctx.save(); ctx.globalCompositeOperation = 'lighter';
                 ctx.fillStyle = `rgba(255,140,230,${0.5 * k})`; ctx.fillRect(Math.min(x0, x1), by - 60 * k, Math.abs(x1 - x0), 120 * k);
@@ -1606,7 +1606,7 @@ const MEGUMI = {
               if (!t || t.state === 'ko' || d.age % 55 !== 25) return;
               const k = (d.n = (d.n || 0) + 1) % 3;
               if (k === 1) {
-                const fromRight = t.x < W / 2;
+                const fromRight = t.x < (World.left + World.right) / 2;
                 makeDog(f, { x: fromRight ? World.right - 30 : World.left + 30, dir: fromRight ? -1 : 1, color: U.pick(['#f2f2f6', '#1b1b24']), speed: 11, life: 110, bites: 1, dmg: 45 });
               } else if (k === 2) nueStrike(f, t.x, 24, { dmg: 50 });
               else eruption(f, t.x, { delay: 24, w: 80, h: 170, kind: 'shadow', tele: '#9b6bff', sfx: 'slash', debris: '#1a1028', hits: { dmg: 50, kb: 3, kby: -13, launch: true, fx: 'slash', color: '#9b6bff' } });
@@ -2111,8 +2111,8 @@ const HANAMI = {
             onStart(d, t) { t.applyStun(310, true, true); },
             tick(d) {
               // purely beautiful: drifting petals and rising motes of light
-              if (d.age % 2 === 0) FX.add({ type: 'glow', x: U.rand(0, W), y: FLOOR - U.rand(0, 60), vx: U.rand(-0.3, 0.3), vy: U.rand(-1.6, -0.6), life: 70, size: U.rand(4, 8), color: U.pick(['#fff3c0', '#ffe08a', '#d8ffb0']), drag: 0.995 });
-              if (d.age % 4 === 0) FX.add({ type: 'clover', x: U.rand(-40, W), y: U.rand(-20, 200), vx: U.rand(0.6, 1.6), vy: U.rand(0.5, 1.2), life: 140, size: U.rand(3, 5), color: U.pick(['#ffc8e0', '#ffffff', '#ffb3d9']), drag: 1, rot: Math.random() * 6, vr: U.rand(-0.06, 0.06) });
+              if (d.age % 2 === 0) FX.add({ type: 'glow', x: U.rand(Cam.x, Cam.x + Cam.w), y: FLOOR - U.rand(0, 60), vx: U.rand(-0.3, 0.3), vy: U.rand(-1.6, -0.6), life: 70, size: U.rand(4, 8), color: U.pick(['#fff3c0', '#ffe08a', '#d8ffb0']), drag: 0.995 });
+              if (d.age % 4 === 0) FX.add({ type: 'clover', x: U.rand(Cam.x - 40, Cam.x + Cam.w), y: U.rand(-20, 200), vx: U.rand(0.6, 1.6), vy: U.rand(0.5, 1.2), life: 140, size: U.rand(3, 5), color: U.pick(['#ffc8e0', '#ffffff', '#ffb3d9']), drag: 1, rot: Math.random() * 6, vr: U.rand(-0.06, 0.06) });
             },
             onEnd(d, interrupted) {
               if (interrupted) return;
@@ -2263,7 +2263,7 @@ const JOGO = {
           Domains.start(f, {
             type: 'volcano', life: 300, bg: drawVolcanoBg,
             tick(d, t) {
-              if (d.age % 3 === 0) FX.glow(U.rand(0, W), FLOOR - U.rand(0, 40), U.pick(['#ff9a2a', '#ff5a1a']), 14, 30, 0, -3);
+              if (d.age % 3 === 0) FX.glow(U.rand(Cam.x, Cam.x + Cam.w), FLOOR - U.rand(0, 40), U.pick(['#ff9a2a', '#ff5a1a']), 14, 30, 0, -3);
               if (!t || t.state === 'ko') return;
               t.buffs.burn = Math.max(t.buffs.burn || 0, 20);
               if (d.age > 20 && d.age % 10 === 0)
@@ -2744,7 +2744,7 @@ function drawGiantJudge(ctx, d) {
 
 // The judge's fist descends on a convicted opponent; it lands 20 frames after being called.
 function judgeFist(t) {
-  const sx = t.x > W / 2 ? W / 2 + 170 : W / 2 - 170;
+  const mid = Cam.x + Cam.w / 2, sx = t.x > mid ? mid + 170 : mid - 170;
   return World.spawn(new Entity({
     x: sx, y: 220, tx: t.x, ty: t.y - 40, sx, life: 40, layer: 'front', owner: World.domain && World.domain.owner,
     tick(e) {
@@ -3280,7 +3280,7 @@ const DAIGO = {
               if (d.age % 80 !== 40 || d.lastSpin === d.age) return;
               d.lastSpin = d.age;
               const r = Math.random(), slot = r < 0.2 ? 'green' : r < 0.6 ? 'red' : 'black';
-              FX.text(W / 2, 140, slot.toUpperCase(), slot === 'green' ? '#5fd65a' : slot === 'red' ? '#ff4d5a' : '#ffffff', 40, 60);
+              FX.text(Cam.x + Cam.w / 2, 140, slot.toUpperCase(), slot === 'green' ? '#5fd65a' : slot === 'red' ? '#ff4d5a' : '#ffffff', 40, 60);
               Sound.play('tick');
               if (slot === 'green') { triggerJackpot(f); f.hp = Math.min(f.maxHp, f.hp + 120); return; }
               for (const v of World.enemies(f)) {
@@ -3880,7 +3880,7 @@ const COMMUNISM = {
           Domains.start(f, {
             type: 'redsquare', life: 420, slowOpp: true, bg: drawRedSquareBg, music: 'moskau',
             tick(d, t) {
-              if (d.age % 28 === 0) for (let i = 0; i < 6; i++) FX.add({ type: 'glow', x: U.rand(0, W), y: U.rand(-20, 120), vx: U.rand(-1, 1), vy: U.rand(1, 3), life: 60, size: U.rand(5, 9), color: U.pick(['#ff4d5a', GOLD, '#ffffff']), drag: 0.99 });
+              if (d.age % 28 === 0) for (let i = 0; i < 6; i++) FX.add({ type: 'glow', x: U.rand(Cam.x, Cam.x + Cam.w), y: U.rand(-20, 120), vx: U.rand(-1, 1), vy: U.rand(1, 3), life: 60, size: U.rand(5, 9), color: U.pick(['#ff4d5a', GOLD, '#ffffff']), drag: 0.99 });
               if (!t) return;
               if (t.ce > 0 && !t.def.noCE) { const n = Math.min(0.12, t.ce); t.ce -= n; f.gainCe(n); }
               // a massive swarm of comrades charges in from both edges of the arena
@@ -4208,22 +4208,54 @@ const CAPITALISM = {
       },
     },
     {
-      name: 'Make It Rain', icon: '札', color: '#8fc47a', cost: 24, cd: 260, ai: { min: 150, max: 1000 },
-      desc: 'Tosses a fortune into the air: razor-crisp bills flutter down over the opponent, each one cutting as it lands.',
+      name: 'Make It Rain', icon: '札', color: '#8fc47a', cost: 24, cd: 260, ai: { min: 0, max: 1280, when: (f, o) => !underCover(o) },
+      desc: 'Tosses a fortune into the sky: razor-crisp bills flutter down over the WHOLE map for 2.5 seconds, each one cutting as it lands. Platforms catch the cash, so anyone sheltering under one is safe — the money just piles up on top.',
       move: {
         id: 'makeitrain', kind: 'special', startup: 14, active: 1, recovery: 16, poses: ['castW', 'win'],
-        onFrame(f, fr, t) {
+        onFrame(f, fr) {
           if (fr !== 14) return;
           Sound.play('cash'); FX.text(f.x, f.y - 190, 'MAKE IT RAIN', '#8fc47a', 22, 45);
-          const cx = t ? t.x : f.x + f.facing * 300;
-          for (let i = 0; i < 9; i++) {
-            spawnProj(f, {
-              x: cx + U.rand(-110, 110), y: U.rand(-80, -10), vy: U.rand(4, 6), r: 12, life: 140, wallKill: false, ph: Math.random() * 6, rot: 0,
-              hits: { dmg: 12, kb: 1, stun: 12, noScale: true, hitstop: 1, fx: 'slash', color: '#8fc47a', sfx: 'slash' },
-              tick(e) { e.vx = Math.sin(e.age * 0.12 + e.ph) * 2.5; e.rot = Math.sin(e.age * 0.12 + e.ph) * 0.6; if (e.y > FLOOR - 6) e.kill('ground'); },
-              render(ctx, e) { drawBill(ctx, e.x, e.y, e.rot); },
-            });
-          }
+          // one summon owns the shower: it drops bills across the map and keeps the piles where they land
+          spawnSummon(f, {
+            x: f.x, y: 0, life: 150 + 420, piles: new Map(), layer: 'front',
+            tick(e) {
+              if (e.age > 150) return;
+              const span = World.right - World.left, n = span * 0.06 / 150;
+              for (let k = Math.floor(n + Math.random()); k > 0; k--) {
+                spawnProj(f, {
+                  x: U.rand(World.left, World.right), y: U.rand(-90, -10), vy: U.rand(4, 6), r: 12, life: 260, wallKill: false, ph: Math.random() * 6, rot: 0,
+                  hits: { dmg: 10, kb: 1, stun: 12, noScale: true, hitstop: 1, fx: 'slash', color: '#8fc47a', sfx: 'slash' },
+                  tick(b) {
+                    b.vx = Math.sin(b.age * 0.12 + b.ph) * 2.5; b.rot = Math.sin(b.age * 0.12 + b.ph) * 0.6;
+                    // the first surface under the bill (a platform or the floor) catches it
+                    const gy = World.groundAt(b.x, b.y);
+                    if (b.y + b.vy >= gy) {
+                      const key = Math.round(b.x / 18);
+                      const pile = e.piles.get(key + '@' + gy) || { x: key * 18, y: gy, n: 0, t: e.age };
+                      pile.n = Math.min(pile.n + 1, 9); pile.t = e.age;
+                      e.piles.set(key + '@' + gy, pile);
+                      b.kill('ground');
+                    }
+                  },
+                  render(ctx, b) { drawBill(ctx, b.x, b.y, b.rot); },
+                });
+              }
+            },
+            render(ctx, e) {
+              const fade = Math.min(1, (e.life - e.age) / 60);
+              ctx.save(); ctx.globalAlpha = fade;
+              for (const p of e.piles.values()) {
+                for (let i = 0; i < p.n; i++) {
+                  const ox = Math.sin(p.x * 0.7 + i * 2.1) * 6, rot = Math.sin(p.x + i * 1.7) * 0.25;
+                  ctx.save(); ctx.translate(p.x + ox, p.y - 2 - i * 3); ctx.rotate(rot);
+                  ctx.fillStyle = i % 2 ? '#7ab066' : '#8fc47a'; ctx.strokeStyle = '#2a4a22'; ctx.lineWidth = 1;
+                  ctx.fillRect(-13, -3, 26, 5); ctx.strokeRect(-13, -3, 26, 5);
+                  ctx.restore();
+                }
+              }
+              ctx.restore();
+            },
+          });
         },
       },
     },
@@ -4273,7 +4305,7 @@ const CAPITALISM = {
     },
     {
       name: 'Nuke', icon: '核', color: '#ff6a2a', cost: 60, cd: 1100, ground: true, ai: { min: 0, max: 1280 },
-      desc: 'Hits the big red button. A target zone tracks the opponent for a moment, then locks — and a nuke whistles down on it. Up to 180 damage at ground zero, less toward the edge. Unblockable but dodgeable, and Capitalism takes half damage if he\'s caught in his own blast.',
+      desc: 'Hits the big red button. A target zone tracks the opponent for a moment, then locks — and a nuke whistles down on it. Up to 280 damage at ground zero, still 90+ at the edge. Unblockable but dodgeable, and Capitalism takes half damage if he\'s caught in his own blast.',
       move: {
         id: 'nuke', kind: 'special', startup: 0, active: 0, recovery: 0, total: 48, poses: ['castW', 'cast'],
         getPose: (f, fr) => (fr < 26 ? POSES.castW : fr < 40 ? POSES.point : POSES.idle),
@@ -4302,7 +4334,7 @@ const CAPITALISM = {
                     if (w.state === 'ko') continue;
                     const d = Math.abs(w.x - e.x);
                     if (d > e.R2) continue;
-                    const dmg = d < e.R1 ? 180 : Math.round(U.lerp(130, 50, (d - e.R1) / (e.R2 - e.R1))), dir = w.x >= e.x ? 1 : -1;
+                    const dmg = d < e.R1 ? 280 : Math.round(U.lerp(220, 90, (d - e.R1) / (e.R2 - e.R1))), dir = w.x >= e.x ? 1 : -1;
                     if (w === f || w.team === f.team) {
                       if (w !== f) continue;
                       w.hp = Math.max(1, w.hp - dmg / 2); w.vx = dir * 12; w.vy = -12; w.onGround = false; w.interruptMove(); w.setState('launch');
@@ -4661,7 +4693,7 @@ const JUAN = {
           spawnSummon(f, {
             x: W / 2, y: 0, life: 230, grains: [], layer: 'front',
             tick(e) {
-              if (e.age < 190) for (let i = 0; i < 9; i++) e.grains.push({ x: U.rand(0, W), y: U.rand(-40, 0), vy: U.rand(4, 7), c: U.pick([CHILI, '#ff8a1a', '#a8281a', '#d86a2a']), t: 0, land: 0 });
+              if (e.age < 190) for (let i = 0; i < 9; i++) e.grains.push({ x: U.rand(World.left, World.right), y: U.rand(-40, 0), vy: U.rand(4, 7), c: U.pick([CHILI, '#ff8a1a', '#a8281a', '#d86a2a']), t: 0, land: 0 });
               for (const p of e.grains) {
                 if (p.land) { p.t++; continue; }
                 p.y += p.vy; p.x += Math.sin((p.y + p.x) * 0.02) * 0.6;
@@ -4681,7 +4713,7 @@ const JUAN = {
             render(ctx, e) {
               const a = Math.min(1, (e.life - e.age) / 25);
               ctx.save(); ctx.globalAlpha = 0.18 * a * Math.min(1, e.age / 30);
-              ctx.fillStyle = '#ff6a2a'; ctx.fillRect(0, 0, W, FLOOR);
+              ctx.fillStyle = '#ff6a2a'; ctx.fillRect(World.left - 40, -600, World.right - World.left + 80, FLOOR + 600);
               ctx.globalAlpha = a;
               for (const p of e.grains) { ctx.fillStyle = p.c; ctx.globalAlpha = a * (p.land ? 1 - p.t / 40 : 1); ctx.fillRect(p.x - 1.5, p.y - 3, 3, p.land ? 2 : 5); }
               ctx.restore();
@@ -4720,7 +4752,7 @@ const JUAN = {
             type: 'hotdesert', life: 420, slowOpp: true, bg: drawHotDesertBg, music: 'desert',
             tick(d, t) {
               if (f.state !== 'ko') f.shells = 2;   // endless ammo in his own desert
-              if (d.age % 10 === 0) FX.add({ type: 'glow', x: U.rand(0, W), y: FLOOR - U.rand(0, 20), vx: U.rand(-0.5, 0.5), vy: U.rand(-2, -1), life: 60, size: U.rand(6, 10), color: 'rgba(255,240,200,0.6)', drag: 0.99 });
+              if (d.age % 10 === 0) FX.add({ type: 'glow', x: U.rand(Cam.x, Cam.x + Cam.w), y: FLOOR - U.rand(0, 20), vx: U.rand(-0.5, 0.5), vy: U.rand(-2, -1), life: 60, size: U.rand(6, 10), color: 'rgba(255,240,200,0.6)', drag: 0.99 });
               if (!t) return;
               t.hp = Math.max(1, t.hp - 0.22);   // the heat
               if (d.age % 6 === 0) FX.glow(t.x + U.rand(-16, 16), t.y - U.rand(20, 140) * t.scale, '#ff9a3a', 9, 16, 0, -1.6);
